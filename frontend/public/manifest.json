@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "ScrollFact",
+  "description": "스크롤에 맞춰 웹 페이지 문단의 맥락과 신뢰도를 보여주는 사이드 패널입니다.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_title": "ScrollFact 열기",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "permissions": ["sidePanel", "tabs", "activeTab", "storage", "identity"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/sidepanel/index.html"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/content/index.ts"],
+      "css": ["src/content/highlight.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

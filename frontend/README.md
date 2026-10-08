@@ -1,75 +1,24 @@
-# React + TypeScript + Vite
+# ScrollFact (스크롤팩트)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+웹 페이지를 스크롤하면, 화면 한가운데 문단에 맞춰 신뢰도 카드를 보여주는 Chrome 사이드 패널입니다. 백엔드에 연결하기 전에는 5개 문단의 모의 분석 데이터를 사용합니다.
 
-Currently, two official plugins are available:
+## 개발
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Chrome에서 `chrome://extensions`를 열고 개발자 모드에서 `dist` 폴더를 로드합니다. 툴바의 ScrollFact 아이콘을 누르면 현재 페이지 오른쪽에 화면의 절반 크기 패널이 열립니다. 왼쪽 경계를 드래그해 너비를 바꾸고, 접기로 좁은 막대로 줄일 수 있습니다.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+동작 확인용 샘플 기사는 개발 서버의 `/demo.html` 입니다. 페이지를 새로고침한 뒤 아이콘으로 패널을 열고, **이 페이지 맥락/신뢰도 분석**을 누른 다음 스크롤합니다.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 빌드
 
+```bash
+npm run build
 ```
+
+`dist`를 압축 해제된 확장 프로그램으로 로드하면 됩니다.
+
+`manifest.json` 원본은 `public/manifest.json`에 있습니다. CRXJS가 빌드하면서 스크립트 경로를 바꿔 `dist/manifest.json`을 만듭니다.
