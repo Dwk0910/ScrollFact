@@ -1,134 +1,140 @@
 export const MessageType = {
-  requestParse: 'REQUEST_PARSE',
-  getCurrent: 'GET_CURRENT',
-  activeParagraphChanged: 'ACTIVE_PARAGRAPH_CHANGED',
-  getActiveParagraph: 'GET_ACTIVE_PARAGRAPH',
-  togglePanel: 'TOGGLE_PANEL',
+  togglePanel: 'SF_TOGGLE_PANEL',
+  getContext: 'SF_GET_CONTEXT',
+  captureDocument: 'SF_CAPTURE_DOCUMENT',
+  watchSections: 'SF_WATCH_SECTIONS',
+  stopWatching: 'SF_STOP_WATCHING',
+  scrollToSection: 'SF_SCROLL_TO_SECTION',
+  activeSectionChanged: 'SF_ACTIVE_SECTION_CHANGED',
+  documentChanged: 'SF_DOCUMENT_CHANGED',
 } as const
 
-export type CredibilityStatus = 'aligned' | 'insufficient' | 'caution'
-
+export type TrustStatus = 'high' | 'good' | 'caution' | 'low' | 'danger'
 export type AnalysisStatus = 'ready' | 'loading' | 'done' | 'error'
 
+export interface DocumentSnapshot {
+  snapshotId: string
+  url: string
+  title: string
+  html: string
+}
+
+export interface TrustAssessment {
+  score: number
+  status: TrustStatus
+  summary: string
+}
+
 export interface SourceLink {
-  label: string
+  title: string
+  publisher: string
   url: string
 }
 
-export interface StanceSummary {
-  summary: readonly string[]
-  sources: readonly SourceLink[]
-}
-
-export interface GlossaryTerm {
-  word: string
-  explanation: string
-}
-
-export interface ParagraphAnalysis {
-  trustScore: number
-  keyClaim: string
-  credibility: CredibilityStatus
-  credibilityLabel: string
-  stanceA: StanceSummary
-  stanceB: StanceSummary
-  terms: readonly GlossaryTerm[]
-}
-
-export interface ParsedParagraph {
+export interface SectionAnalysis extends TrustAssessment {
   id: string
-  index: number
-  text: string
-}
-
-export interface ActiveParagraphPayload {
-  paragraphId: string
-  index: number
-  text: string
-  url: string
+  selector: string
   title: string
-  total: number
+  excerpt: string
+  reasons: { title: string; detail: string }[]
+  sources: SourceLink[]
 }
 
-export interface ParseResultPayload {
-  url: string
-  title: string
-  paragraphs: ParsedParagraph[]
-  active: ActiveParagraphPayload | null
+export interface AnalysisResponse {
+  schemaVersion: '1.0'
+  analysisId: string
+  snapshotId: string
+  document: { url: string; title: string }
+  overview: TrustAssessment
+  sections: SectionAnalysis[]
 }
 
-export interface ActiveParagraphMessage {
-  type: typeof MessageType.activeParagraphChanged
-  payload: ActiveParagraphPayload
+export type AnalyzeDocument = (
+  snapshot: DocumentSnapshot,
+  signal: AbortSignal,
+) => Promise<AnalysisResponse>
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export interface GetActiveParagraphMessage {
-  type: typeof MessageType.getActiveParagraph
-  tabId: number
+export function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
 }
 
-export interface ParseSuccessResponse {
-  ok: true
-  payload: ParseResultPayload
+function nonempty(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
 }
 
-export interface CurrentSuccessResponse {
-  ok: true
-  payload: ActiveParagraphPayload | null
-  paragraphs?: ParsedParagraph[]
-}
-
-export interface ErrorResponse {
-  ok: false
-  error: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-export function isActiveParagraphPayload(value: unknown): value is ActiveParagraphPayload {
-  if (!isRecord(value)) return false
+function isAssessment(value: unknown): value is TrustAssessment {
   return (
-    typeof value.paragraphId === 'string' &&
-    typeof value.index === 'number' &&
-    typeof value.text === 'string' &&
-    typeof value.url === 'string' &&
+    isRecord(value) &&
+    Number.isInteger(value.score) &&
+    Number(value.score) >= 0 &&
+    Number(value.score) <= 100 &&
+    ['high', 'good', 'caution', 'low', 'danger'].includes(
+      String(value.status),
+    ) &&
+    nonempty(value.summary)
+  )
+}
+
+export function isDocumentSnapshot(value: unknown): value is DocumentSnapshot {
+  return (
+    isRecord(value) &&
+    nonempty(value.snapshotId) &&
+    isHttpUrl(value.url) &&
     typeof value.title === 'string' &&
-    typeof value.total === 'number'
+    nonempty(value.html)
   )
 }
 
-export function isActiveParagraphMessage(value: unknown): value is ActiveParagraphMessage {
-  return (
-    isRecord(value) &&
-    value.type === MessageType.activeParagraphChanged &&
-    isActiveParagraphPayload(value.payload)
+export function isAnalysisResponse(value: unknown): value is AnalysisResponse {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== '1.0' ||
+    !nonempty(value.analysisId) ||
+    !nonempty(value.snapshotId) ||
+    !isRecord(value.document) ||
+    !isHttpUrl(value.document.url) ||
+    !nonempty(value.document.title) ||
+    !isAssessment(value.overview) ||
+    !Array.isArray(value.sections)
   )
-}
-
-export function isGetActiveParagraphMessage(
-  value: unknown,
-): value is GetActiveParagraphMessage {
-  return (
-    isRecord(value) &&
-    value.type === MessageType.getActiveParagraph &&
-    typeof value.tabId === 'number'
-  )
-}
-
-export function isParseSuccessResponse(value: unknown): value is ParseSuccessResponse {
-  if (!isRecord(value) || value.ok !== true || !isRecord(value.payload)) return false
-  const payload = value.payload
-  return (
-    typeof payload.url === 'string' &&
-    typeof payload.title === 'string' &&
-    Array.isArray(payload.paragraphs) &&
-    (payload.active === null || isActiveParagraphPayload(payload.active))
-  )
-}
-
-export function isCurrentSuccessResponse(value: unknown): value is CurrentSuccessResponse {
-  if (!isRecord(value) || value.ok !== true) return false
-  return value.payload === null || isActiveParagraphPayload(value.payload)
+    return false
+  const ids = new Set<string>()
+  return value.sections.every((section: unknown) => {
+    if (
+      !isRecord(section) ||
+      !isAssessment(section) ||
+      !nonempty(section.id) ||
+      ids.has(section.id) ||
+      !nonempty(section.selector) ||
+      !nonempty(section.title) ||
+      !nonempty(section.excerpt) ||
+      !Array.isArray(section.reasons) ||
+      !Array.isArray(section.sources)
+    )
+      return false
+    ids.add(section.id)
+    return (
+      section.reasons.every(
+        (reason: unknown) =>
+          isRecord(reason) && nonempty(reason.title) && nonempty(reason.detail),
+      ) &&
+      section.sources.every(
+        (source: unknown) =>
+          isRecord(source) &&
+          nonempty(source.title) &&
+          nonempty(source.publisher) &&
+          isHttpUrl(source.url),
+      )
+    )
+  })
 }

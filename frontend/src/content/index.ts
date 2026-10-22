@@ -1,380 +1,353 @@
-import {
-  MessageType,
-  type ActiveParagraphPayload,
-  type ParseSuccessResponse,
-  type ParsedParagraph,
-} from '../types'
+import { isRecord, MessageType, type DocumentSnapshot } from '../types'
 
-const MIN_TEXT_LENGTH = 40
 const STORAGE_KEY = 'scrollfactPanel'
-const RAIL_WIDTH = 44
-const MIN_PANEL_WIDTH = 320
-const MAX_PANEL_RATIO = 0.7
-
-let paragraphs: HTMLElement[] = []
-let parsedParagraphs: ParsedParagraph[] = []
-let activeId: string | null = null
-let lastPayload: ActiveParagraphPayload | null = null
-let stopWatching: (() => void) | null = null
-let panelOffset = 0
+let snapshot: { snapshotId: string; url: string } | null = null
+let stopWatch: (() => void) | null = null
+let navigationTimer: number | undefined
 let panelGeneration = 0
-let detachPanelResize: (() => void) | null = null
-const ratios = new Map<HTMLElement, number>()
+let panelOffset = 0
+let detachPanel: (() => void) | null = null
+let activeId: string | null = null
+let targets = new Map<string, HTMLElement>()
 
-interface SavedPanel {
-  width: number
-  collapsed: boolean
-}
-
-function normalizeText(value: string): string {
-  return value.replace(/\s+/g, ' ').trim()
-}
-
-function isSkippable(element: HTMLElement): boolean {
-  return Boolean(
-    element.closest(
-      'nav, footer, aside, header, [role="navigation"], [role="contentinfo"], [data-scrollfact-root]',
-    ),
-  )
-}
-
-function centerRootMargin(): string {
-  return `-40% ${Math.max(0, panelOffset)}px -40% 0px`
-}
-
-function clampPanelWidth(px: number): number {
-  const max = Math.max(MIN_PANEL_WIDTH, Math.round(window.innerWidth * MAX_PANEL_RATIO))
-  return Math.min(max, Math.max(MIN_PANEL_WIDTH, Math.round(px)))
-}
-
-function readSavedPanel(value: unknown): SavedPanel | null {
-  if (typeof value !== 'object' || value === null) return null
-  const record = value as { width?: unknown; collapsed?: unknown }
-  if (typeof record.width !== 'number' || typeof record.collapsed !== 'boolean') return null
-  return { width: record.width, collapsed: record.collapsed }
-}
-
-function meaningfulParagraphs(nodes: HTMLElement[]): HTMLElement[] {
-  return nodes.filter((element) => {
-    if (isSkippable(element)) return false
-    return normalizeText(element.textContent ?? '').length >= MIN_TEXT_LENGTH
+function emit(message: unknown) {
+  chrome.runtime.sendMessage(message, () => {
+    void chrome.runtime.lastError
   })
 }
 
-function collectBlocks(): HTMLElement[] {
-  const scopes = [
-    document.querySelector('article'),
-    document.querySelector('main'),
-    document.querySelector('[role="main"]'),
-    document.body,
-  ].filter((node): node is HTMLElement => node instanceof HTMLElement)
-
-  for (const scope of scopes) {
-    const paragraphsInScope = meaningfulParagraphs(Array.from(scope.querySelectorAll('p')))
-    if (paragraphsInScope.length > 0) return paragraphsInScope
-  }
-
-  const article = document.querySelector('article')
-  const root = article instanceof HTMLElement ? article : document.body
-  return Array.from(root.children).filter((node): node is HTMLElement => {
-    if (!(node instanceof HTMLElement) || isSkippable(node)) return false
-    return normalizeText(node.textContent ?? '').length >= 80
-  })
+function clearWatch() {
+  stopWatch?.()
+  stopWatch = null
+  for (const element of targets.values())
+    element.classList.remove('scrollfact-active')
+  targets = new Map()
+  activeId = null
 }
 
-function assignIds(blocks: HTMLElement[]) {
-  blocks.forEach((element, index) => {
-    element.dataset.scrollfactId = `sf-p-${index}`
-  })
+function resetSnapshot() {
+  clearWatch()
+  window.clearInterval(navigationTimer)
+  navigationTimer = undefined
+  snapshot = null
 }
 
-function toParsedParagraph(element: HTMLElement, index: number): ParsedParagraph {
+function checkLocation() {
+  if (!snapshot || snapshot.url === location.href) return
+  resetSnapshot()
+  emit({ type: MessageType.documentChanged })
+}
+
+function captureDocument(): DocumentSnapshot {
+  resetSnapshot()
+  snapshot = { snapshotId: crypto.randomUUID(), url: location.href }
+  navigationTimer = window.setInterval(checkLocation, 500)
   return {
-    id: element.dataset.scrollfactId ?? `sf-p-${index}`,
-    index,
-    text: normalizeText(element.textContent ?? '').slice(0, 600),
-  }
-}
-
-function chooseActive(): HTMLElement | null {
-  let best: HTMLElement | null = null
-  let bestRatio = 0
-
-  for (const element of paragraphs) {
-    const ratio = ratios.get(element) ?? 0
-    if (ratio > bestRatio) {
-      bestRatio = ratio
-      best = element
-    }
-  }
-
-  if (best) return best
-
-  const viewportMid = window.innerHeight / 2
-  let closest: HTMLElement | null = null
-  let closestDistance = Number.POSITIVE_INFINITY
-
-  for (const element of paragraphs) {
-    const rect = element.getBoundingClientRect()
-    if (rect.bottom < 0 || rect.top > window.innerHeight) continue
-    const distance = Math.abs(rect.top + rect.height / 2 - viewportMid)
-    if (distance < closestDistance) {
-      closestDistance = distance
-      closest = element
-    }
-  }
-
-  return closest
-}
-
-function emit(payload: ActiveParagraphPayload) {
-  lastPayload = payload
-  chrome.runtime.sendMessage(
-    { type: MessageType.activeParagraphChanged, payload },
-    () => {
-      void chrome.runtime.lastError
-    },
-  )
-}
-
-function publish(next: HTMLElement | null) {
-  for (const element of paragraphs) {
-    element.classList.toggle('scrollfact-active', element === next)
-  }
-
-  if (!next) return
-
-  const paragraphId = next.dataset.scrollfactId
-  if (!paragraphId || paragraphId === activeId) return
-
-  activeId = paragraphId
-  emit({
-    paragraphId,
-    index: paragraphs.indexOf(next),
-    text: normalizeText(next.textContent ?? '').slice(0, 600),
-    url: location.href,
+    ...snapshot,
     title: document.title,
-    total: paragraphs.length,
-  })
+    html: document.documentElement.outerHTML,
+  }
 }
 
-function startWatching(blocks: HTMLElement[]) {
-  stopWatching?.()
-  ratios.clear()
+function matchElement(selector: string): HTMLElement | null {
+  try {
+    const matches = document.querySelectorAll(selector)
+    if (matches.length !== 1) return null
+    const element = matches[0]
+    if (
+      !(element instanceof HTMLElement) ||
+      element.closest('[data-scrollfact-root]') ||
+      ['HTML', 'BODY', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME'].includes(
+        element.tagName,
+      )
+    )
+      return null
+    return element
+  } catch {
+    return null
+  }
+}
 
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!(entry.target instanceof HTMLElement)) continue
-        ratios.set(entry.target, entry.isIntersecting ? entry.intersectionRatio : 0)
-      }
-      publish(chooseActive())
-    },
-    {
-      root: null,
-      rootMargin: centerRootMargin(),
-      threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
-    },
-  )
-
-  for (const element of blocks) observer.observe(element)
+function watchSections(value: unknown, snapshotId: unknown) {
+  checkLocation()
+  if (!snapshot || snapshot.snapshotId !== snapshotId || !Array.isArray(value))
+    return { ok: false }
+  const specs: { id: string; selector: string }[] = []
+  const ids = new Set<string>()
+  for (const item of value) {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== 'string' ||
+      typeof item.selector !== 'string' ||
+      !item.id ||
+      !item.selector ||
+      ids.has(item.id)
+    )
+      return { ok: false }
+    ids.add(item.id)
+    specs.push({ id: item.id, selector: item.selector })
+  }
+  clearWatch()
+  const unmatchedIds: string[] = []
+  const originalText = new Map<string, string>()
+  const matchedElements = new Set<HTMLElement>()
+  for (const spec of specs) {
+    const element = matchElement(spec.selector)
+    if (!element || matchedElements.has(element)) {
+      unmatchedIds.push(spec.id)
+      continue
+    }
+    matchedElements.add(element)
+    targets.set(spec.id, element)
+    originalText.set(spec.id, element.textContent ?? '')
+  }
 
   let frame = 0
-  const onViewportChange = () => {
-    if (frame) return
-    frame = window.requestAnimationFrame(() => {
-      frame = 0
-      publish(chooseActive())
-    })
-  }
-
-  window.addEventListener('scroll', onViewportChange, { passive: true })
-  window.addEventListener('resize', onViewportChange)
-
-  stopWatching = () => {
-    observer.disconnect()
-    window.removeEventListener('scroll', onViewportChange)
-    window.removeEventListener('resize', onViewportChange)
-    if (frame) window.cancelAnimationFrame(frame)
-  }
-}
-
-function parsePage(): ParseSuccessResponse {
-  document.querySelectorAll('.scrollfact-active').forEach((node) => {
-    node.classList.remove('scrollfact-active')
-  })
-
-  const blocks = collectBlocks()
-  assignIds(blocks)
-  paragraphs = blocks
-  parsedParagraphs = blocks.map(toParsedParagraph)
-  activeId = null
-  lastPayload = null
-  startWatching(blocks)
-  if (!lastPayload) publish(chooseActive())
-
-  return {
-    ok: true,
-    payload: {
-      url: location.href,
-      title: document.title,
-      paragraphs: parsedParagraphs,
-      active: lastPayload,
-    },
-  }
-}
-
-function onMessage(
-  message: unknown,
-  _sender: chrome.runtime.MessageSender,
-  sendResponse: (response: unknown) => void,
-) {
-  if (typeof message !== 'object' || message === null || !('type' in message)) return
-
-  const type = message.type
-  if (type === MessageType.requestParse) {
-    try {
-      sendResponse(parsePage())
-    } catch (error) {
-      sendResponse({
-        ok: false,
-        error: error instanceof Error ? error.message : '문단을 분석하지 못했습니다.',
-      } satisfies { ok: false; error: string })
+  let mutationTimer: number | undefined
+  const updateActive = () => {
+    frame = 0
+    checkLocation()
+    if (!snapshot) return
+    const middle = window.innerHeight * 0.45
+    let bestId: string | null = null
+    let bestDistance = Infinity
+    for (const [id, element] of targets) {
+      if (
+        !element.isConnected ||
+        !element.getClientRects().length ||
+        getComputedStyle(element).visibility === 'hidden'
+      )
+        continue
+      const rect = element.getBoundingClientRect()
+      if (
+        rect.bottom <= 0 ||
+        rect.top >= window.innerHeight ||
+        rect.right <= 0 ||
+        rect.left >= window.innerWidth - panelOffset
+      )
+        continue
+      // Distance to the visible paragraph's interval, with its midpoint as a tiebreaker.
+      const distance =
+        Math.max(rect.top - middle, middle - rect.bottom, 0) * 1000 +
+        Math.abs((rect.top + rect.bottom) / 2 - middle)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestId = id
+      }
     }
-    return true
+    if (bestId === activeId) return
+    activeId = bestId
+    for (const [id, element] of targets)
+      element.classList.toggle('scrollfact-active', id === bestId)
+    if (bestId)
+      emit({
+        type: MessageType.activeSectionChanged,
+        snapshotId: snapshot.snapshotId,
+        sectionId: bestId,
+      })
   }
-
-  if (type === MessageType.getCurrent) {
-    sendResponse({ ok: true, payload: lastPayload, paragraphs: parsedParagraphs })
-    return true
+  const schedule = () => {
+    if (!frame) frame = window.requestAnimationFrame(updateActive)
   }
-
-  if (type === MessageType.togglePanel) {
-    void togglePanel()
-    return undefined
+  const observer = new MutationObserver(() => {
+    window.clearTimeout(mutationTimer)
+    mutationTimer = window.setTimeout(() => {
+      checkLocation()
+      if (!snapshot) return
+      for (const spec of specs) {
+        if (!originalText.has(spec.id)) continue
+        const element = matchElement(spec.selector)
+        const previous = targets.get(spec.id)
+        if (element && element.textContent !== originalText.get(spec.id)) {
+          resetSnapshot()
+          emit({ type: MessageType.documentChanged })
+          return
+        }
+        if (previous !== element) {
+          previous?.classList.remove('scrollfact-active')
+          if (element) targets.set(spec.id, element)
+          else targets.delete(spec.id)
+          activeId = null
+        }
+      }
+      schedule()
+    }, 150)
+  })
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  })
+  window.addEventListener('scroll', schedule, { capture: true, passive: true })
+  window.addEventListener('resize', schedule)
+  window.addEventListener('popstate', checkLocation)
+  window.addEventListener('hashchange', checkLocation)
+  stopWatch = () => {
+    observer.disconnect()
+    window.clearTimeout(mutationTimer)
+    window.cancelAnimationFrame(frame)
+    window.removeEventListener('scroll', schedule, true)
+    window.removeEventListener('resize', schedule)
+    window.removeEventListener('popstate', checkLocation)
+    window.removeEventListener('hashchange', checkLocation)
   }
-
-  return undefined
+  // Do not jump past the overall gauge until the reader actually scrolls the source.
+  return { ok: true, unmatchedIds }
 }
 
-function setPageOffset(offset: number, refreshWatch: boolean) {
-  panelOffset = offset
-  document.documentElement.style.setProperty('--scrollfact-offset', `${offset}px`)
-  document.documentElement.classList.toggle('scrollfact-open', offset > 0)
-  if (refreshWatch && paragraphs.length > 0) startWatching(paragraphs)
+function setPageOffset(width: number) {
+  panelOffset = width
+  document.documentElement.style.setProperty(
+    '--scrollfact-offset',
+    `${width}px`,
+  )
+  document.documentElement.classList.toggle('scrollfact-open', width > 0)
 }
 
 function closePanel() {
   panelGeneration += 1
-  detachPanelResize?.()
-  detachPanelResize = null
+  detachPanel?.()
+  detachPanel = null
   document.getElementById('scrollfact-root')?.remove()
-  setPageOffset(0, true)
+  setPageOffset(0)
+  resetSnapshot()
+}
+
+function clampWidth(width: number) {
+  const min = Math.min(320, Math.max(200, window.innerWidth - 48))
+  const max = Math.max(min, Math.round(window.innerWidth * 0.7))
+  return Math.min(max, Math.max(min, width))
 }
 
 async function openPanel() {
   if (document.getElementById('scrollfact-root')) return
-  const generation = panelGeneration + 1
-  panelGeneration = generation
-
+  const generation = ++panelGeneration
   const stored = await chrome.storage.local.get(STORAGE_KEY)
-  if (generation !== panelGeneration || document.getElementById('scrollfact-root')) return
-  const saved = readSavedPanel(stored[STORAGE_KEY])
-  let width = clampPanelWidth(saved?.width ?? window.innerWidth * 0.5)
-  let collapsed = saved?.collapsed ?? false
-
+  if (
+    generation !== panelGeneration ||
+    document.getElementById('scrollfact-root')
+  )
+    return
+  const saved: unknown = stored[STORAGE_KEY]
+  let width = clampWidth(
+    isRecord(saved) &&
+      typeof saved.width === 'number' &&
+      Number.isFinite(saved.width)
+      ? saved.width
+      : 440,
+  )
+  let collapsed = false
   const root = document.createElement('div')
   root.id = 'scrollfact-root'
   root.dataset.scrollfactRoot = 'true'
-
-  const handle = document.createElement('button')
-  handle.type = 'button'
-  handle.className = 'scrollfact-handle'
-  handle.setAttribute('aria-label', '패널 너비 조절')
-
-  const collapse = document.createElement('button')
-  collapse.type = 'button'
-  collapse.className = 'scrollfact-collapse'
-  collapse.textContent = '접기'
-
-  const frame = document.createElement('iframe')
-  frame.className = 'scrollfact-frame'
-  frame.title = 'ScrollFact'
+  const shadow = root.attachShadow({ mode: 'closed' })
+  shadow.innerHTML = `<style>
+    :host { all: initial; position: fixed !important; inset: 0 0 0 auto !important; height: 100dvh !important; z-index: 2147483646 !important; background: #f8faf8 !important; box-shadow: -8px 0 30px #2034280c !important; }
+    .shell { display: flex; height: 100%; width: 100%; font-family: sans-serif; }
+    .handle { width: 7px; flex-shrink: 0; border: 0; border-left: 1px solid #dfe7db; background: #edf2e9; cursor: ew-resize; touch-action: none; padding: 0; }
+    .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .tools { height: 25px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-bottom: 1px solid #e2e9df; background: #f2f6ef; padding: 0 8px; }
+    .tools button { border: 0; background: transparent; color: #6f846e; padding: 2px 6px; font: 11px sans-serif; cursor: pointer; }
+    iframe { flex: 1; min-height: 0; width: 100%; border: 0; }
+    .expand { display: none; width: 44px; height: 100%; border: 0; background: #285f4d; color: #fff; writing-mode: vertical-rl; font: 600 12px sans-serif; letter-spacing: 2px; cursor: pointer; }
+    :host(.collapsed) .body, :host(.collapsed) .handle { display: none; }
+    :host(.collapsed) .expand { display: block; }
+    button:focus-visible { outline: 2px solid #288563; outline-offset: -2px; }
+  </style><div class="shell"><button class="handle" aria-label="패널 너비 조절. 좌우 방향키로 조절할 수 있습니다."></button><div class="body"><div class="tools"><button class="collapse" aria-label="패널 접기">접기 −</button><button class="close" aria-label="패널 닫기">닫기 ×</button></div><iframe title="ScrollFact 분석 패널"></iframe></div><button class="expand" aria-label="ScrollFact 패널 펼치기">SCROLLFACT</button></div>`
+  const frame = shadow.querySelector('iframe')!
   frame.src = chrome.runtime.getURL('src/sidepanel/index.html')
-
-  const expand = document.createElement('button')
-  expand.type = 'button'
-  expand.className = 'scrollfact-expand'
-  expand.textContent = 'ScrollFact'
-
-  root.append(handle, collapse, frame, expand)
-  document.documentElement.append(root)
-
+  const handle = shadow.querySelector<HTMLButtonElement>('.handle')!
   const persist = () => {
-    const next: SavedPanel = { width, collapsed }
-    void chrome.storage.local.set({ [STORAGE_KEY]: next })
+    void chrome.storage.local.set({ [STORAGE_KEY]: { width } })
   }
-
-  const apply = (refreshWatch: boolean) => {
-    root.classList.toggle('scrollfact-collapsed', collapsed)
-    collapse.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
-    const offset = collapsed ? RAIL_WIDTH : width
-    root.style.width = `${offset}px`
-    setPageOffset(offset, refreshWatch)
+  const apply = () => {
+    root.classList.toggle('collapsed', collapsed)
+    root.style.setProperty('width', `${collapsed ? 44 : width}px`, 'important')
+    setPageOffset(collapsed ? 44 : width)
   }
-
-  collapse.addEventListener('click', () => {
+  shadow.querySelector('.collapse')!.addEventListener('click', () => {
     collapsed = true
-    apply(true)
-    persist()
+    apply()
   })
-
-  expand.addEventListener('click', () => {
+  shadow.querySelector('.expand')!.addEventListener('click', () => {
     collapsed = false
-    width = clampPanelWidth(width)
-    apply(true)
-    persist()
+    width = clampWidth(width)
+    apply()
   })
-
+  shadow.querySelector('.close')!.addEventListener('click', closePanel)
+  let dragging = false
   handle.addEventListener('pointerdown', (event) => {
-    if (collapsed) return
-    event.preventDefault()
+    if (event.button !== 0) return
+    dragging = true
     handle.setPointerCapture(event.pointerId)
     frame.style.pointerEvents = 'none'
-
-    const onMove = (move: PointerEvent) => {
-      width = clampPanelWidth(window.innerWidth - move.clientX)
-      apply(false)
-    }
-    const onUp = () => {
-      frame.style.pointerEvents = ''
-      handle.removeEventListener('pointermove', onMove)
-      handle.removeEventListener('pointerup', onUp)
-      apply(true)
-      persist()
-    }
-
-    handle.addEventListener('pointermove', onMove)
-    handle.addEventListener('pointerup', onUp)
   })
-
+  handle.addEventListener('pointermove', (event) => {
+    if (!dragging) return
+    width = clampWidth(window.innerWidth - event.clientX)
+    apply()
+  })
+  const stopDrag = () => {
+    dragging = false
+    frame.style.pointerEvents = ''
+    persist()
+  }
+  handle.addEventListener('pointerup', stopDrag)
+  handle.addEventListener('pointercancel', stopDrag)
+  handle.addEventListener('lostpointercapture', stopDrag)
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    width = clampWidth(width + (event.key === 'ArrowLeft' ? 24 : -24))
+    apply()
+    persist()
+  })
   const onResize = () => {
-    if (!document.getElementById('scrollfact-root')) return
-    width = clampPanelWidth(width)
-    apply(false)
+    width = clampWidth(width)
+    apply()
   }
   window.addEventListener('resize', onResize)
-  detachPanelResize = () => window.removeEventListener('resize', onResize)
-
-  apply(true)
+  detachPanel = () => window.removeEventListener('resize', onResize)
+  document.documentElement.append(root)
+  apply()
 }
 
-function togglePanel() {
-  if (document.getElementById('scrollfact-root')) closePanel()
-  else void openPanel()
-}
-
-if (document.documentElement.dataset.scrollfactBound !== 'true') {
-  document.documentElement.dataset.scrollfactBound = 'true'
-  chrome.runtime.onMessage.addListener(onMessage)
-}
+chrome.runtime.onMessage.addListener(
+  (message: unknown, _sender, sendResponse) => {
+    if (!isRecord(message)) return
+    if (message.type === MessageType.togglePanel) {
+      if (document.getElementById('scrollfact-root')) closePanel()
+      else void openPanel()
+    }
+    if (message.type === MessageType.captureDocument)
+      sendResponse({ ok: true, snapshot: captureDocument() })
+    if (message.type === MessageType.watchSections)
+      sendResponse(watchSections(message.targets, message.snapshotId))
+    if (message.type === MessageType.stopWatching) {
+      resetSnapshot()
+      sendResponse({ ok: true })
+    }
+    if (message.type === MessageType.scrollToSection) {
+      checkLocation()
+      const element =
+        typeof message.sectionId === 'string'
+          ? targets.get(message.sectionId)
+          : null
+      if (
+        !snapshot ||
+        snapshot.snapshotId !== message.snapshotId ||
+        !element?.isConnected
+      ) {
+        sendResponse({ ok: false })
+        return
+      }
+      element.scrollIntoView({
+        block: 'center',
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'instant'
+          : 'smooth',
+      })
+      sendResponse({ ok: true })
+    }
+  },
+)

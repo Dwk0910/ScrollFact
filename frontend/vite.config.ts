@@ -16,4 +16,15 @@ function stripCrossorigin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), crx({ manifest }), stripCrossorigin()],
+  server: {
+    host: '127.0.0.1',
+    port: 5173,
+    strictPort: true,
+    hmr: { host: '127.0.0.1' },
+  },
+  build: {
+    rolldownOptions: {
+      input: { preview: 'index.html' },
+    },
+  },
 })

@@ -3,56 +3,112 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ScrollFact 데모 기사</title>
+    <title>에너지 전환, 숫자 너머의 이야기 · ScrollFact 데모</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
-        background: #f7f4ee;
-        color: #1c1915;
-        font-family: "Malgun Gothic", sans-serif;
+        background: #f8faf6;
+        color: #294032;
+        font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
       }
       article {
-        max-width: 680px;
-        margin: 0 auto;
-        padding: 48px 20px 80px;
+        max-width: 720px;
+        margin: auto;
+        padding: 70px 35px 150px;
       }
-      h1 { font-size: 32px; line-height: 1.35; }
-      h2 { margin: 0 0 12px; font-size: 18px; }
-      section { min-height: 85vh; padding-top: 12vh; }
-      p { margin: 0; font-size: 18px; line-height: 1.8; }
+      header {
+        border-bottom: 1px solid #dde6d8;
+        padding-bottom: 50px;
+      }
+      small {
+        color: #789371;
+        letter-spacing: 2px;
+        font-size: 10px;
+      }
+      h1 {
+        font-size: 38px;
+        line-height: 1.4;
+        letter-spacing: -1.5px;
+      }
+      header p {
+        font-size: 14px;
+        line-height: 1.9;
+        color: #86937d;
+      }
+      section {
+        min-height: 80vh;
+        padding-top: 18vh;
+      }
+      h2 {
+        font-size: 23px;
+        line-height: 1.5;
+        letter-spacing: -0.6px;
+        margin: 18px 0;
+      }
+      section p {
+        font-size: 18px;
+        line-height: 2;
+        color: #66775c;
+      }
+      aside {
+        margin-top: 40px;
+        border-top: 1px solid #dde6d8;
+        padding-top: 20px;
+        font-size: 12px;
+        color: #9aa390;
+      }
     </style>
   </head>
   <body>
     <article>
       <header>
-        <h1>샘플 기사: 숫자로 읽는 올해의 공공 통계</h1>
-        <p>확장 프로그램 동작 확인용 기사입니다. 사이드 패널에서 분석을 누른 뒤 이 페이지를 스크롤하면 가운데 문단이 바뀝니다.</p>
+        <small>SCROLLFACT / DEMO ARTICLE</small>
+        <h1>에너지 전환,<br />숫자 너머의 이야기</h1>
+        <p>
+          화면과 스크롤 연동을 확인하기 위한 가상의 기사입니다. 아래 주장과
+          분석은 실제 팩트체크 결과가 아닙니다. Chrome에서 ScrollFact를 열고
+          분석한 뒤 천천히 스크롤해 보세요.
+        </p>
       </header>
-
       <section>
-        <h2>문단 1</h2>
-        <p>2024년 국내 재생에너지 발전 비중은 연간 발전량 기준으로 처음 10%를 넘어섰다. 증가분의 중심은 태양광이었고, 수력을 제외한 신재생 합계로 다시 계산해도 같은 방향을 가리킨다.</p>
+        <small>01 / THE DIRECTION</small>
+        <h2>재생에너지는 꾸준히 늘고 있다</h2>
+        <p id="sf-demo-p1">
+          재생에너지 발전량은 최근 몇 년간 꾸준히 증가했다. 태양광과 풍력이
+          증가분의 중심이며, 전력 생산에서 차지하는 역할도 커지고 있다.
+        </p>
       </section>
       <section>
-        <h2>문단 2</h2>
-        <p>주민등록인구로 보면 수도권 인구는 전체의 절반을 넘긴 상태가 10년째 이어졌다. 서울은 줄고 경기도가 늘어나면서 수도권 합계의 비중이 유지됐다는 설명이 따라붙는다.</p>
+        <small>02 / THE NUMBERS</small>
+        <h2>같은 비율, 다른 집계 기준</h2>
+        <p id="sf-demo-p2">
+          재생에너지는 이미 전력의 상당 부분을 담당한다. 설치된 발전 설비의
+          비중을 보면 에너지 전환이 빠르게 진행되고 있음을 알 수 있다.
+        </p>
       </section>
       <section>
-        <h2>문단 3</h2>
-        <p>전기차 보조금 단가가 낮아진 해에 신규 등록이 40% 줄었다는 문장이 보도에 반복된다. 등록 감소 자체는 확인되지만, 그 폭이 연간 수치인지 특정 분기인지에 따라 해석이 달라진다.</p>
+        <small>03 / THE CAUSE</small>
+        <h2>전기요금 상승의 원인은 하나일까</h2>
+        <p id="sf-demo-p3">
+          전기요금이 오른 것은 전적으로 재생에너지 확대 때문이다. 재생에너지를
+          줄이면 전기요금 문제도 곧바로 해결할 수 있다.
+        </p>
       </section>
       <section>
-        <h2>문단 4</h2>
-        <p>국공립대 평균 등록금은 10년간 사실상 동결됐다는 요약이 자주 인용된다. 국립대 학부 명목 등록금만 보면 큰 인상이 없지만, 사립대와 물가를 반영하면 같은 문장으로 말하기 어렵다.</p>
+        <small>04 / THE CONDITIONS</small>
+        <h2>전환의 속도만큼 중요한 조건</h2>
+        <p id="sf-demo-p4">
+          안정적인 에너지 전환을 위해서는 발전 설비뿐 아니라 전력망과 저장
+          장치에 대한 투자가 함께 필요하다. 비용과 안정성을 함께 고려하는 접근이
+          중요하다.
+        </p>
       </section>
-      <section>
-        <h2>문단 5</h2>
-        <p>국내 미세먼지 고농도 일의 대부분은 국외 유입 때문이라는 단정이 한 사례 연구를 근거로 다시 쓰이고 있다. 서풍이 강했던 특정 사례의 기여율을 연간 대부분으로 넓혀 말한 것이다.</p>
-      </section>
-      <section>
-        <h2>문단 6</h2>
-        <p>여섯 번째 문단은 모의 분석이 첫 샘플로 되돌아가는지 확인하는 자리다. 같은 페이지 안에서도 문단 색인이 바뀌면 사이드 패널의 신뢰 점수와 대립 시각이 함께 바뀌어야 한다.</p>
-      </section>
+      <aside>
+        이 글의 4개 문단은 루트 TSX의 샘플 응답이 지정하는 요소와 일치합니다.
+      </aside>
     </article>
   </body>
 </html>

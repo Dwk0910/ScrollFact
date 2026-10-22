@@ -1,213 +1,243 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { mockAnalyses } from '../../mock/mockData'
 import {
-  isActiveParagraphMessage,
-  isActiveParagraphPayload,
-  isCurrentSuccessResponse,
-  isParseSuccessResponse,
+  isAnalysisResponse,
+  isDocumentSnapshot,
+  isRecord,
   MessageType,
-  type ActiveParagraphPayload,
+  type AnalysisResponse,
   type AnalysisStatus,
-  type ParsedParagraph,
+  type AnalyzeDocument,
+  type DocumentSnapshot,
 } from '../../types'
 
-function isExtensionContext(): boolean {
-  return typeof chrome !== 'undefined' && typeof chrome.runtime?.id === 'string'
-}
-
-function previewParagraphs(): ParsedParagraph[] {
-  return mockAnalyses.map((item, index) => ({
-    id: `sf-p-${index}`,
-    index,
-    text: `${item.keyClaim} 로컬 미리보기에서는 이 문장을 페이지 발췌로 보여 줍니다.`,
-  }))
-}
-
-function readParagraphs(value: unknown): ParsedParagraph[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item) => {
-    if (typeof item !== 'object' || item === null) return []
-    const record = item as { id?: unknown; index?: unknown; text?: unknown }
-    if (typeof record.id !== 'string' || typeof record.index !== 'number' || typeof record.text !== 'string') {
-      return []
-    }
-    return [{ id: record.id, index: record.index, text: record.text }]
-  })
-}
-
-function buildPreviewPayload(index: number): ActiveParagraphPayload {
-  const total = mockAnalyses.length
-  const safeIndex = ((index % total) + total) % total
-  const item = mockAnalyses[safeIndex] ?? mockAnalyses[0]
-  return {
-    paragraphId: `sf-p-${safeIndex}`,
-    index: safeIndex,
-    text: `${item.keyClaim} 로컬 미리보기에서는 이 문장을 페이지 발췌로 보여 줍니다.`,
-    url: 'https://example.com/scrollfact-preview',
-    title: '로컬 미리보기',
-    total,
-  }
-}
-
-export function usePageAnalysis() {
-  const inExtension = isExtensionContext()
-  const tabIdRef = useRef<number | null>(null)
+export function usePageAnalysis(
+  analyzeDocument: AnalyzeDocument,
+  demo: boolean,
+) {
+  const inExtension =
+    typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id)
+  const tabRef = useRef<number | null>(null)
+  const resultRef = useRef<AnalysisResponse | null>(null)
+  const requestRef = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
   const [status, setStatus] = useState<AnalysisStatus>('ready')
+  const [result, setResult] = useState<AnalysisResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [active, setActive] = useState<ActiveParagraphPayload | null>(null)
-  const [paragraphs, setParagraphs] = useState<ParsedParagraph[]>([])
-  const [pageTitle, setPageTitle] = useState('')
-  const [previewIndex, setPreviewIndex] = useState(0)
+  const [sourceSection, setSourceSection] = useState<string | null>(null)
 
-  const applyPayload = useCallback((payload: ActiveParagraphPayload) => {
-    setActive(payload)
-    setPageTitle(payload.title)
-    setNotice(null)
-    setError(null)
-    setStatus('done')
+  const resolveTab = useCallback(async () => {
+    if (tabRef.current !== null) return tabRef.current
+    // An embedded panel belongs to its own tab, even when another tab becomes active.
+    const context: unknown = await chrome.runtime.sendMessage({
+      type: MessageType.getContext,
+    })
+    if (isRecord(context) && typeof context.tabId === 'number') {
+      tabRef.current = context.tabId
+    } else {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      })
+      if (tab?.id === undefined) throw new Error('분석할 탭을 찾지 못했습니다.')
+      tabRef.current = tab.id
+    }
+    return tabRef.current
   }, [])
 
-  const showPreview = useCallback((index: number) => {
-    const payload = buildPreviewPayload(index)
-    setPreviewIndex(payload.index)
-    setParagraphs(previewParagraphs())
-    applyPayload(payload)
-  }, [applyPayload])
-
-  const analyze = useCallback(async () => {
-    setStatus('loading')
+  const clear = useCallback(() => {
+    requestRef.current += 1
+    abortRef.current?.abort()
+    resultRef.current = null
+    setResult(null)
+    setSourceSection(null)
+    setStatus('ready')
     setError(null)
-    setNotice(null)
-
-    if (!inExtension) {
-      await new Promise((resolve) => window.setTimeout(resolve, 350))
-      showPreview(0)
-      return
-    }
-
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (tab?.id == null) {
-        setStatus('error')
-        setError('활성 탭을 찾지 못했습니다.')
-        return
-      }
-
-      tabIdRef.current = tab.id
-      const response: unknown = await chrome.tabs.sendMessage(tab.id, {
-        type: MessageType.requestParse,
-      })
-
-      if (!isParseSuccessResponse(response)) {
-        setStatus('error')
-        setError('페이지 분석 응답을 해석하지 못했습니다.')
-        return
-      }
-
-      setPageTitle(response.payload.title)
-      setParagraphs(response.payload.paragraphs)
-      if (!response.payload.active) {
-        setActive(null)
-        setStatus('done')
-        setNotice('이 페이지에서 본문 문단을 찾지 못했습니다.')
-        return
-      }
-
-      applyPayload(response.payload.active)
-    } catch {
-      setStatus('error')
-      setError('이 탭을 분석할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.')
-    }
-  }, [applyPayload, inExtension, showPreview])
+  }, [])
 
   useEffect(() => {
-    if (!inExtension) return
-
-    let cancelled = false
-
-    const restoreFromTab = async (tabId: number, url?: string) => {
-      try {
-        const response: unknown = await chrome.tabs.sendMessage(tabId, {
-          type: MessageType.getCurrent,
-        })
-        if (cancelled || !isCurrentSuccessResponse(response)) return
-        const restored = readParagraphs(response.paragraphs)
-        if (restored.length > 0) setParagraphs(restored)
-        if (!response.payload) return
-        applyPayload(response.payload)
-        return
-      } catch {
-        const cached: unknown = await chrome.runtime.sendMessage({
-          type: MessageType.getActiveParagraph,
-          tabId,
-        })
-        if (cancelled || !isActiveParagraphPayload(cached)) return
-        if (url && cached.url !== url) return
-        applyPayload(cached)
+    if (!inExtension)
+      return () => {
+        requestRef.current += 1
+        abortRef.current?.abort()
+      }
+    const onMessage = (
+      message: unknown,
+      sender: chrome.runtime.MessageSender,
+    ) => {
+      if (!isRecord(message) || sender.tab?.id !== tabRef.current) return
+      if (message.type === MessageType.documentChanged) {
+        clear()
+        setNotice('페이지가 변경되었습니다. 다시 분석해 주세요.')
+      }
+      if (
+        message.type === MessageType.activeSectionChanged &&
+        message.snapshotId === resultRef.current?.snapshotId &&
+        typeof message.sectionId === 'string' &&
+        resultRef.current?.sections.some((s) => s.id === message.sectionId)
+      ) {
+        setSourceSection(message.sectionId)
       }
     }
-
-    const onMessage = (message: unknown, sender: chrome.runtime.MessageSender) => {
-      if (!isActiveParagraphMessage(message)) return
-      const senderTabId = sender.tab?.id
-      if (tabIdRef.current != null && senderTabId !== tabIdRef.current) return
-      applyPayload(message.payload)
+    const onUpdated = (tabId: number, change: chrome.tabs.OnUpdatedInfo) => {
+      if (tabId === tabRef.current && change.status === 'loading') {
+        clear()
+        setNotice('페이지가 변경되었습니다. 다시 분석해 주세요.')
+      }
     }
-
-    const onActivated = (info: chrome.tabs.OnActivatedInfo) => {
-      tabIdRef.current = info.tabId
-      setActive(null)
-      setParagraphs([])
-      setPageTitle('')
-      setStatus('ready')
-      setError(null)
-      setNotice(null)
-      void chrome.tabs.get(info.tabId).then((tab) => {
-        if (cancelled) return
-        return restoreFromTab(info.tabId, tab.url)
-      })
-    }
-
-    const onUpdated = (updatedTabId: number, changeInfo: chrome.tabs.OnUpdatedInfo) => {
-      if (updatedTabId !== tabIdRef.current || changeInfo.status !== 'loading') return
-      setActive(null)
-      setParagraphs([])
-      setPageTitle('')
-      setStatus('ready')
-      setError(null)
-      setNotice(null)
-    }
-
     chrome.runtime.onMessage.addListener(onMessage)
-    chrome.tabs.onActivated.addListener(onActivated)
     chrome.tabs.onUpdated.addListener(onUpdated)
-
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (cancelled || tab?.id == null) return
-      tabIdRef.current = tab.id
-      return restoreFromTab(tab.id, tab.url)
-    })
-
     return () => {
-      cancelled = true
+      requestRef.current += 1
+      abortRef.current?.abort()
       chrome.runtime.onMessage.removeListener(onMessage)
-      chrome.tabs.onActivated.removeListener(onActivated)
       chrome.tabs.onUpdated.removeListener(onUpdated)
+      if (tabRef.current !== null) {
+        void chrome.tabs
+          .sendMessage(tabRef.current, { type: MessageType.stopWatching })
+          .catch(() => undefined)
+      }
     }
-  }, [applyPayload, inExtension])
+  }, [clear, inExtension])
+
+  const analyze = useCallback(async () => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const request = ++requestRef.current
+    const isCurrent = () =>
+      requestRef.current === request && !controller.signal.aborted
+    resultRef.current = null
+    setResult(null)
+    setSourceSection(null)
+    setError(null)
+    setNotice(null)
+    setStatus('loading')
+    let timedOut = false
+    const timeout = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 60_000)
+    try {
+      let snapshot: DocumentSnapshot
+      if (inExtension) {
+        const tabId = await resolveTab()
+        if (!isCurrent()) return
+        const response: unknown = await chrome.tabs.sendMessage(tabId, {
+          type: MessageType.captureDocument,
+        })
+        if (
+          !isRecord(response) ||
+          response.ok !== true ||
+          !isDocumentSnapshot(response.snapshot)
+        ) {
+          throw new Error(
+            '페이지를 가져오지 못했습니다. 원문을 새로고침한 뒤 다시 시도해 주세요.',
+          )
+        }
+        snapshot = response.snapshot
+      } else {
+        if (!demo)
+          throw new Error(
+            '실제 페이지 분석은 Chrome 확장 프로그램에서 실행해 주세요.',
+          )
+        snapshot = {
+          snapshotId: crypto.randomUUID(),
+          url: location.href,
+          title: document.title,
+          html: document.documentElement.outerHTML,
+        }
+      }
+      if (!isCurrent()) return
+      const response: unknown = await analyzeDocument(
+        snapshot,
+        controller.signal,
+      )
+      if (!isCurrent()) return
+      if (!isAnalysisResponse(response))
+        throw new Error('분석 결과의 형식이 올바르지 않습니다.')
+      if (
+        response.snapshotId !== snapshot.snapshotId ||
+        response.document.url !== snapshot.url
+      ) {
+        throw new Error(
+          '다른 페이지의 분석 결과가 도착했습니다. 다시 분석해 주세요.',
+        )
+      }
+      if (inExtension && tabRef.current !== null) {
+        const watched: unknown = await chrome.tabs.sendMessage(tabRef.current, {
+          type: MessageType.watchSections,
+          snapshotId: snapshot.snapshotId,
+          targets: response.sections.map(({ id, selector }) => ({
+            id,
+            selector,
+          })),
+        })
+        if (!isCurrent()) return
+        if (!isRecord(watched) || watched.ok !== true) {
+          throw new Error('분석 중 원문이 변경되었습니다. 다시 분석해 주세요.')
+        }
+        if (
+          Array.isArray(watched.unmatchedIds) &&
+          watched.unmatchedIds.length > 0
+        ) {
+          setNotice(
+            `${watched.unmatchedIds.length}개 문단의 원문 위치를 찾지 못했습니다. 분석 내용은 아래에서 확인할 수 있습니다.`,
+          )
+        }
+      }
+      resultRef.current = response
+      setResult(response)
+      setStatus('done')
+    } catch (caught) {
+      if (requestRef.current !== request) return
+      if (controller.signal.aborted && !timedOut) return
+      setStatus('error')
+      setError(
+        timedOut
+          ? '분석 시간이 길어지고 있습니다. 잠시 후 다시 시도해 주세요.'
+          : caught instanceof Error
+            ? caught.message
+            : '페이지를 분석하지 못했습니다.',
+      )
+    } finally {
+      window.clearTimeout(timeout)
+    }
+  }, [analyzeDocument, demo, inExtension, resolveTab])
+
+  const jumpToSource = useCallback(
+    async (sectionId: string) => {
+      if (!inExtension || tabRef.current === null || !resultRef.current) return
+      try {
+        const response: unknown = await chrome.tabs.sendMessage(
+          tabRef.current,
+          {
+            type: MessageType.scrollToSection,
+            snapshotId: resultRef.current.snapshotId,
+            sectionId,
+          },
+        )
+        if (!isRecord(response) || response.ok !== true)
+          throw new Error('이 문단의 원문 위치를 찾지 못했습니다.')
+        setNotice(null)
+      } catch {
+        setNotice(
+          '이 문단의 원문 위치를 찾지 못했습니다. 페이지가 바뀌었다면 다시 분석해 주세요.',
+        )
+      }
+    },
+    [inExtension],
+  )
 
   return {
     inExtension,
     status,
+    result,
     error,
     notice,
-    active,
-    paragraphs,
-    pageTitle,
-    previewIndex,
+    sourceSection,
     analyze,
-    showPrevious: () => showPreview(previewIndex - 1),
-    showNext: () => showPreview(previewIndex + 1),
+    cancel: clear,
+    jumpToSource,
   }
 }
