@@ -24,7 +24,7 @@ export default defineConfig({
   },
   build: {
     rolldownOptions: {
-      input: { preview: 'index.html' },
+      input: { preview: 'index.html', integration: 'integration.html' },
     },
   },
 })

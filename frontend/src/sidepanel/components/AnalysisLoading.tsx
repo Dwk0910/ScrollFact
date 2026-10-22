@@ -13,11 +13,11 @@ const steps = [
   },
   {
     title: '본문과 주장 살펴보기',
-    description: '페이지를 문단으로 나누고 확인할 주장을 찾고 있어요.',
+    description: '페이지를 문단으로 나누고 출처 링크를 찾고 있어요.',
   },
   {
     title: '출처 하나씩 확인하기',
-    description: '참고 자료를 읽고 원문의 주장과 비교하고 있어요.',
+    description: '연결된 참고 자료의 본문을 수집하고 있어요.',
   },
   {
     title: '신뢰도와 근거 정리',
@@ -42,9 +42,11 @@ const preparationLabels = {
 export function AnalysisLoading({
   progress,
   onCancel,
+  diagnostic = false,
 }: {
   progress: AnalysisProgress
   onCancel: () => void
+  diagnostic?: boolean
 }) {
   const [elapsed, setElapsed] = useState(0)
   const screenRef = useRef<HTMLElement>(null)
@@ -111,7 +113,7 @@ export function AnalysisLoading({
         <span>{description}</span>
       </div>
       <ol className="analysis-steps" aria-label="분석 단계">
-        {steps.map((step, index) => (
+        {(diagnostic ? steps.slice(0, 4) : steps).map((step, index) => (
           <li
             key={step.title}
             className={

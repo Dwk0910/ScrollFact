@@ -220,3 +220,26 @@ test('rejects a result from a different snapshot without deleting a completed jo
   )
   assert.deepEqual(methods, ['POST', 'GET'])
 })
+
+
+test('diagnostic mode uses the same upload and polling flow without accepting AI results', async () => {
+  const diagnostic = { schemaVersion: '1.0', kind: 'diagnostic', analysisId: fixture.analysisId,
+    snapshotId: snapshot.snapshotId, document: fixture.document, htmlBytes: Buffer.byteLength(snapshot.html),
+    passages: [{ id: 'p1', selector: 'p', text: '원문' }],
+    sources: [{ url: 'https://example.com/', title: '', textCharacters: 0, failure: '연결 실패' }] }
+  let returned = diagnostic
+  const api = setup(async (url, init) => {
+    if (init.method === 'POST') {
+      assert.equal(JSON.parse(await init.body.get('metadata').text()).mode, 'diagnostic')
+      return response(queued, 202)
+    }
+    return response(url.endsWith('/result') ? returned : completed)
+  })
+  const run = api.createDiagnosticAnalyzer('https://api.example.test')
+  const result = await run(snapshot, new AbortController().signal)
+  assert.equal(result.kind, 'diagnostic')
+  assert.equal(result.sources[0].failure, '연결 실패')
+  assert.equal(result.overview, undefined)
+  returned = fixture
+  await assert.rejects(run(snapshot, new AbortController().signal), /형식/)
+})

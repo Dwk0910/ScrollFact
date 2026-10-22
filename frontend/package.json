@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:api": "node --test tests/api.test.mjs",
+    "test:live": "node tests/live-api.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

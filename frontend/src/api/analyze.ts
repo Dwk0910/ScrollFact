@@ -2,6 +2,9 @@ import {
   isAnalysisJob,
   isAnalysisResponse,
   type AnalyzeDocument,
+  type AnalysisResponse,
+  type DocumentSnapshot,
+  type AnalysisProgress,
   type AnalysisJob,
   isRecord,
   MAX_HTML_BYTES,
@@ -45,6 +48,42 @@ async function readJob(response: Response): Promise<AnalysisJob> {
 }
 
 export function createApiAnalyzer(baseUrl: string): AnalyzeDocument {
+  return createJobRunner<AnalysisResponse>(baseUrl, 'analysis', isAnalysisResponse)
+}
+
+export function createDiagnosticAnalyzer(baseUrl: string) {
+  return createJobRunner<DiagnosticResult>(baseUrl, 'diagnostic', isDiagnosticResult)
+}
+
+export interface DiagnosticResult {
+  schemaVersion: '1.0'
+  kind: 'diagnostic'
+  analysisId: string
+  snapshotId: string
+  document: { url: string; title: string }
+  htmlBytes: number
+  passages: { id: string; selector: string; text: string }[]
+  sources: { url: string; title: string; textCharacters: number; failure?: string }[]
+}
+
+function isDiagnosticResult(value: unknown): value is DiagnosticResult {
+  return isRecord(value) && value.schemaVersion === '1.0' && value.kind === 'diagnostic'
+    && typeof value.analysisId === 'string' && typeof value.snapshotId === 'string'
+    && isRecord(value.document) && typeof value.document.url === 'string' && typeof value.document.title === 'string'
+    && Number.isSafeInteger(value.htmlBytes) && Number(value.htmlBytes) > 0
+    && Array.isArray(value.passages) && value.passages.every((p: unknown) => isRecord(p)
+      && typeof p.id === 'string' && typeof p.selector === 'string' && typeof p.text === 'string')
+    && Array.isArray(value.sources) && value.sources.every((s: unknown) => isRecord(s)
+      && typeof s.url === 'string' && typeof s.title === 'string'
+      && Number.isSafeInteger(s.textCharacters) && Number(s.textCharacters) >= 0
+      && (s.failure === undefined || typeof s.failure === 'string'))
+}
+
+function createJobRunner<T extends { analysisId: string; snapshotId: string; document: { url: string } }>(
+  baseUrl: string,
+  mode: 'analysis' | 'diagnostic',
+  validate: (value: unknown) => value is T,
+): (snapshot: DocumentSnapshot, signal: AbortSignal, onProgress?: (progress: AnalysisProgress) => void) => Promise<T> {
   return async (snapshot, signal, onProgress) => {
     if (!baseUrl.trim())
       throw new Error('분석 서버가 아직 연결되지 않았습니다.')
@@ -86,6 +125,7 @@ export function createApiAnalyzer(baseUrl: string): AnalyzeDocument {
               title: snapshot.title,
               htmlBytes: html.size,
               encoding: 'gzip',
+              mode,
             }),
           ],
           { type: 'application/json' },
@@ -118,7 +158,7 @@ export function createApiAnalyzer(baseUrl: string): AnalyzeDocument {
           const result = await readBody(
             await request(`${endpoint}/${encodeURIComponent(jobId)}/result`),
           )
-          if (!isAnalysisResponse(result))
+          if (!validate(result))
             throw new Error('분석 결과의 형식이 올바르지 않습니다.')
           if (
             result.analysisId !== jobId ||
