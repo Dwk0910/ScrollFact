@@ -52,6 +52,7 @@ export interface AnalysisResponse {
 export type AnalyzeDocument = (
   snapshot: DocumentSnapshot,
   signal: AbortSignal,
+  onProgress?: (progress: AnalysisProgress) => void,
 ) => Promise<AnalysisResponse>
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -137,4 +138,73 @@ export function isAnalysisResponse(value: unknown): value is AnalysisResponse {
       )
     )
   })
+}
+
+export const MAX_HTML_BYTES = 20 * 1024 * 1024
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+export type ServerPhase =
+  'queued' | 'extracting' | 'checking_sources' | 'summarizing'
+export type AnalysisPhase =
+  'capturing' | 'compressing' | 'uploading' | ServerPhase
+export interface SourceProgress {
+  completed: number
+  total: number | null
+  failed: number
+}
+export interface AnalysisProgress {
+  phase: AnalysisPhase
+  sources?: SourceProgress
+  originalBytes?: number
+  uploadedBytes?: number
+}
+type JobIdentity = { analysisId: string; snapshotId: string }
+export type AnalysisJob = JobIdentity &
+  (
+    | {
+        status: 'queued' | 'running'
+        phase: ServerPhase
+        sources?: SourceProgress
+      }
+    | { status: 'completed'; result: AnalysisResponse }
+    | { status: 'failed'; error: string }
+    | { status: 'cancelled' }
+  )
+
+export function isAnalysisJob(value: unknown): value is AnalysisJob {
+  if (
+    !isRecord(value) ||
+    !nonempty(value.analysisId) ||
+    !nonempty(value.snapshotId)
+  )
+    return false
+  if (value.status === 'completed')
+    return (
+      isAnalysisResponse(value.result) &&
+      value.result.analysisId === value.analysisId &&
+      value.result.snapshotId === value.snapshotId
+    )
+  if (value.status === 'failed') return nonempty(value.error)
+  if (value.status === 'cancelled') return true
+  if (value.status !== 'queued' && value.status !== 'running') return false
+  if (
+    !['queued', 'extracting', 'checking_sources', 'summarizing'].includes(
+      String(value.phase),
+    )
+  )
+    return false
+  if ((value.status === 'queued') !== (value.phase === 'queued')) return false
+  if (value.sources === undefined) return true
+  const sources = value.sources
+  return (
+    isRecord(sources) &&
+    Number.isSafeInteger(sources.completed) &&
+    Number(sources.completed) >= 0 &&
+    Number.isSafeInteger(sources.failed) &&
+    Number(sources.failed) >= 0 &&
+    Number(sources.failed) <= Number(sources.completed) &&
+    (sources.total === null ||
+      (Number.isSafeInteger(sources.total) &&
+        Number(sources.total) >= Number(sources.completed)))
+  )
 }

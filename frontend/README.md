@@ -21,7 +21,7 @@ Chrome의 `chrome://extensions`에서 개발자 모드를 켜고 `dist`를 압�
 
 ## 백엔드 연결
 
-프론트는 원문 탭의 `document.documentElement.outerHTML`을 보내고 응답을 표시합니다. 문단 분리·요약·점수·판정·이유·출처·watch 선택자는 모두 백엔드 책임입니다.
+프론트는 원문 탭의 `document.documentElement.outerHTML`을 gzip 파일로 압축해 업로드합니다. 서버는 202로 작업을 접수하고, 프론트는 단계·출처 처리 건수와 완료 결과를 조회합니다. 원문 20 MiB/압축 5 MiB 상한을 넘으면 잘라 보내지 않고 안내합니다. 문단 분리·요약·점수·판정·이유·출처·watch 선택자는 모두 백엔드 책임입니다.
 
 `.env.local`:
 

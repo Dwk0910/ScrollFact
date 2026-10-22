@@ -4,6 +4,7 @@ import {
   isDocumentSnapshot,
   isRecord,
   MessageType,
+  type AnalysisProgress,
   type AnalysisResponse,
   type AnalysisStatus,
   type AnalyzeDocument,
@@ -20,6 +21,9 @@ export function usePageAnalysis(
   const resultRef = useRef<AnalysisResponse | null>(null)
   const requestRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
+  const [progress, setProgress] = useState<AnalysisProgress>({
+    phase: 'capturing',
+  })
   const [status, setStatus] = useState<AnalysisStatus>('ready')
   const [result, setResult] = useState<AnalysisResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -112,12 +116,13 @@ export function usePageAnalysis(
     setSourceSection(null)
     setError(null)
     setNotice(null)
+    setProgress({ phase: 'capturing' })
     setStatus('loading')
     let timedOut = false
     const timeout = window.setTimeout(() => {
       timedOut = true
       controller.abort()
-    }, 60_000)
+    }, 10 * 60_000)
     try {
       let snapshot: DocumentSnapshot
       if (inExtension) {
@@ -132,7 +137,9 @@ export function usePageAnalysis(
           !isDocumentSnapshot(response.snapshot)
         ) {
           throw new Error(
-            '페이지를 가져오지 못했습니다. 원문을 새로고침한 뒤 다시 시도해 주세요.',
+            isRecord(response) && typeof response.error === 'string'
+              ? response.error
+              : '페이지를 가져오지 못했습니다. 원문을 새로고침한 뒤 다시 시도해 주세요.',
           )
         }
         snapshot = response.snapshot
@@ -152,6 +159,9 @@ export function usePageAnalysis(
       const response: unknown = await analyzeDocument(
         snapshot,
         controller.signal,
+        (next) => {
+          if (isCurrent()) setProgress(next)
+        },
       )
       if (!isCurrent()) return
       if (!isAnalysisResponse(response))
@@ -195,7 +205,7 @@ export function usePageAnalysis(
       setStatus('error')
       setError(
         timedOut
-          ? '분석 시간이 길어지고 있습니다. 잠시 후 다시 시도해 주세요.'
+          ? '10분 안에 분석을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.'
           : caught instanceof Error
             ? caught.message
             : '페이지를 분석하지 못했습니다.',
@@ -232,6 +242,7 @@ export function usePageAnalysis(
   return {
     inExtension,
     status,
+    progress,
     result,
     error,
     notice,

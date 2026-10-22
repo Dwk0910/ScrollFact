@@ -1,4 +1,9 @@
-import { isRecord, MessageType, type DocumentSnapshot } from '../types'
+import {
+  isRecord,
+  MAX_HTML_BYTES,
+  MessageType,
+  type DocumentSnapshot,
+} from '../types'
 
 const STORAGE_KEY = 'scrollfactPanel'
 let snapshot: { snapshotId: string; url: string } | null = null
@@ -40,12 +45,15 @@ function checkLocation() {
 
 function captureDocument(): DocumentSnapshot {
   resetSnapshot()
+  const html = document.documentElement.outerHTML
+  if (new Blob([html]).size > MAX_HTML_BYTES)
+    throw new Error('페이지 HTML이 20 MiB를 초과해 분석할 수 없습니다.')
   snapshot = { snapshotId: crypto.randomUUID(), url: location.href }
   navigationTimer = window.setInterval(checkLocation, 500)
   return {
     ...snapshot,
     title: document.title,
-    html: document.documentElement.outerHTML,
+    html,
   }
 }
 
@@ -319,8 +327,19 @@ chrome.runtime.onMessage.addListener(
       if (document.getElementById('scrollfact-root')) closePanel()
       else void openPanel()
     }
-    if (message.type === MessageType.captureDocument)
-      sendResponse({ ok: true, snapshot: captureDocument() })
+    if (message.type === MessageType.captureDocument) {
+      try {
+        sendResponse({ ok: true, snapshot: captureDocument() })
+      } catch (error) {
+        sendResponse({
+          ok: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : '페이지를 가져오지 못했습니다.',
+        })
+      }
+    }
     if (message.type === MessageType.watchSections)
       sendResponse(watchSections(message.targets, message.snapshotId))
     if (message.type === MessageType.stopWatching) {
