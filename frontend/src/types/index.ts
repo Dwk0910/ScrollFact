@@ -4,6 +4,7 @@ export const MessageType = {
   activeParagraphChanged: 'ACTIVE_PARAGRAPH_CHANGED',
   getActiveParagraph: 'GET_ACTIVE_PARAGRAPH',
   togglePanel: 'TOGGLE_PANEL',
+  getPageHtml: 'GET_PAGE_HTML',
 } as const
 
 export type CredibilityStatus = 'aligned' | 'insufficient' | 'caution'
@@ -78,6 +79,17 @@ export interface CurrentSuccessResponse {
   paragraphs?: ParsedParagraph[]
 }
 
+export interface PageHtmlPayload {
+  url: string
+  title: string
+  html: string
+}
+
+export interface PageHtmlSuccessResponse {
+  ok: true
+  payload: PageHtmlPayload
+}
+
 export interface ErrorResponse {
   ok: false
   error: string
@@ -131,4 +143,12 @@ export function isParseSuccessResponse(value: unknown): value is ParseSuccessRes
 export function isCurrentSuccessResponse(value: unknown): value is CurrentSuccessResponse {
   if (!isRecord(value) || value.ok !== true) return false
   return value.payload === null || isActiveParagraphPayload(value.payload)
+}
+
+export function isPageHtmlSuccessResponse(value: unknown): value is PageHtmlSuccessResponse {
+  if (!isRecord(value) || value.ok !== true || !isRecord(value.payload)) return false
+  const payload = value.payload
+  return (
+    typeof payload.url === 'string' && typeof payload.title === 'string' && typeof payload.html === 'string'
+  )
 }

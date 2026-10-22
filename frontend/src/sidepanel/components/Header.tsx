@@ -1,4 +1,4 @@
-import { LoaderCircle, ScrollText } from 'lucide-react'
+import { Download, LoaderCircle, ScrollText } from 'lucide-react'
 import type { AnalysisStatus } from '../../types'
 
 interface HeaderProps {
@@ -6,6 +6,8 @@ interface HeaderProps {
   onAnalyze: () => void
   onGoogleLogin: () => void
   googleLoading: boolean
+  onSaveHtml: () => void
+  savingHtml: boolean
 }
 
 const badgeLabel: Record<AnalysisStatus, string> = {
@@ -22,7 +24,7 @@ const badgeClass: Record<AnalysisStatus, string> = {
   error: 'bg-rose-100 text-rose-950 ring-rose-200',
 }
 
-export function Header({ status, onAnalyze, onGoogleLogin, googleLoading }: HeaderProps) {
+export function Header({ status, onAnalyze, onGoogleLogin, googleLoading, onSaveHtml, savingHtml }: HeaderProps) {
   const isLoading = status === 'loading'
 
   return (
@@ -60,6 +62,19 @@ export function Header({ status, onAnalyze, onGoogleLogin, googleLoading }: Head
         className="mt-2 flex w-full items-center justify-center rounded-xl bg-white/10 px-3 py-2.5 text-sm font-semibold text-paper ring-1 ring-white/20 transition hover:bg-white/15 disabled:cursor-wait disabled:opacity-80"
       >
         Google로 로그인
+      </button>
+      <button
+        type="button"
+        onClick={onSaveHtml}
+        disabled={savingHtml}
+        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 px-3 py-2.5 text-sm font-semibold text-paper ring-1 ring-white/20 transition hover:bg-white/15 disabled:cursor-wait disabled:opacity-80"
+      >
+        {savingHtml ? (
+          <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <Download className="size-4" aria-hidden="true" />
+        )}
+        {savingHtml ? '저장 중...' : '현재 페이지 HTML 저장'}
       </button>
     </header>
   )

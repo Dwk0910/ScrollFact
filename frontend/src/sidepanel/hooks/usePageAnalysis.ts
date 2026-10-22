@@ -4,6 +4,7 @@ import {
   isActiveParagraphMessage,
   isActiveParagraphPayload,
   isCurrentSuccessResponse,
+  isPageHtmlSuccessResponse,
   isParseSuccessResponse,
   MessageType,
   type ActiveParagraphPayload,
@@ -13,6 +14,26 @@ import {
 
 function isExtensionContext(): boolean {
   return typeof chrome !== 'undefined' && typeof chrome.runtime?.id === 'string'
+}
+
+function htmlFilename(title: string): string {
+  const base = title
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  return `${base || 'page'}.html`
+}
+
+function downloadHtml(html: string, filename: string) {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 function previewParagraphs(): ParsedParagraph[] {
@@ -59,6 +80,7 @@ export function usePageAnalysis() {
   const [paragraphs, setParagraphs] = useState<ParsedParagraph[]>([])
   const [pageTitle, setPageTitle] = useState('')
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [savingHtml, setSavingHtml] = useState(false)
 
   const applyPayload = useCallback((payload: ActiveParagraphPayload) => {
     setActive(payload)
@@ -120,6 +142,49 @@ export function usePageAnalysis() {
       setError('이 탭을 분석할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.')
     }
   }, [applyPayload, inExtension, showPreview])
+
+  const savePageHtml = useCallback(async () => {
+    setSavingHtml(true)
+    setError(null)
+
+    try {
+      if (!inExtension) {
+        downloadHtml(
+          `<!DOCTYPE html>\n${document.documentElement.outerHTML}`,
+          htmlFilename(document.title || 'scrollfact-preview'),
+        )
+        setNotice('미리보기 페이지의 HTML을 저장했습니다.')
+        return
+      }
+
+      let tabId = tabIdRef.current
+      if (tabId == null) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        tabId = tab?.id ?? null
+        tabIdRef.current = tabId
+      }
+      if (tabId == null) {
+        setError('활성 탭을 찾지 못했습니다.')
+        return
+      }
+
+      const response: unknown = await chrome.tabs.sendMessage(tabId, {
+        type: MessageType.getPageHtml,
+      })
+
+      if (!isPageHtmlSuccessResponse(response)) {
+        setError('페이지 HTML 응답을 해석하지 못했습니다.')
+        return
+      }
+
+      downloadHtml(response.payload.html, htmlFilename(response.payload.title))
+      setNotice('현재 페이지 HTML을 저장했습니다.')
+    } catch {
+      setError('HTML을 저장하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.')
+    } finally {
+      setSavingHtml(false)
+    }
+  }, [inExtension])
 
   useEffect(() => {
     if (!inExtension) return
@@ -206,6 +271,8 @@ export function usePageAnalysis() {
     paragraphs,
     pageTitle,
     previewIndex,
+    savingHtml,
+    savePageHtml,
     analyze,
     showPrevious: () => showPreview(previewIndex - 1),
     showNext: () => showPreview(previewIndex + 1),

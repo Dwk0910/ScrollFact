@@ -19,6 +19,8 @@ export function SidePanel() {
     active,
     paragraphs,
     pageTitle,
+    savingHtml,
+    savePageHtml,
     analyze,
     showPrevious,
     showNext,
@@ -55,6 +57,8 @@ export function SidePanel() {
           onAnalyze={() => void analyze()}
           onGoogleLogin={() => void handleGoogleLogin()}
           googleLoading={googleLoading}
+          onSaveHtml={() => void savePageHtml()}
+          savingHtml={savingHtml}
         />
 
         <main className="grid min-h-0 flex-1 grid-cols-1 min-[760px]:grid-cols-2">

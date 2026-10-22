@@ -1,6 +1,7 @@
 import {
   MessageType,
   type ActiveParagraphPayload,
+  type PageHtmlSuccessResponse,
   type ParseSuccessResponse,
   type ParsedParagraph,
 } from '../types'
@@ -224,6 +225,17 @@ function parsePage(): ParseSuccessResponse {
   }
 }
 
+function serializePageHtml(): string {
+  const clone = document.documentElement.cloneNode(true) as HTMLElement
+  clone.querySelector('#scrollfact-root')?.remove()
+  clone.classList.remove('scrollfact-open')
+  clone.style.removeProperty('--scrollfact-offset')
+  clone.querySelectorAll('.scrollfact-active').forEach((node) => {
+    node.classList.remove('scrollfact-active')
+  })
+  return `<!DOCTYPE html>\n${clone.outerHTML}`
+}
+
 function onMessage(
   message: unknown,
   _sender: chrome.runtime.MessageSender,
@@ -246,6 +258,21 @@ function onMessage(
 
   if (type === MessageType.getCurrent) {
     sendResponse({ ok: true, payload: lastPayload, paragraphs: parsedParagraphs })
+    return true
+  }
+
+  if (type === MessageType.getPageHtml) {
+    try {
+      sendResponse({
+        ok: true,
+        payload: { url: location.href, title: document.title, html: serializePageHtml() },
+      } satisfies PageHtmlSuccessResponse)
+    } catch (error) {
+      sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : '페이지 HTML을 가져오지 못했습니다.',
+      } satisfies { ok: false; error: string })
+    }
     return true
   }
 
