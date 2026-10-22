@@ -28,7 +28,7 @@ const queued = {
   status: 'queued',
   phase: 'queued',
 }
-const completed = { ...queued, status: 'completed', result: fixture }
+const completed = { ...queued, status: 'completed' }
 const response = (body, status = 200) =>
   new Response(JSON.stringify(body), { status })
 function setup(fetch) {
@@ -40,7 +40,7 @@ function setup(fetch) {
     CompressionStream,
     AbortSignal,
     DOMException,
-    setTimeout: (fn, ms) => setTimeout(fn, ms === 1500 ? 1 : ms),
+    setTimeout: (fn, ms) => setTimeout(fn, ms === 2000 ? 1 : ms),
     clearTimeout,
     fetch,
   })
@@ -78,6 +78,7 @@ test('uploads exact UTF-8 HTML as gzip multipart; polls actual progress and fina
       assert.ok(binary.length < meta.htmlBytes)
       return response(queued, 202)
     }
+    if (url.endsWith('/result')) return response(fixture)
     return calls.length === 2
       ? response({
           ...queued,
@@ -102,7 +103,8 @@ test('uploads exact UTF-8 HTML as gzip multipart; polls actual progress and fina
     calls[1].url,
     `https://api.example.test/v1/analyses/${fixture.analysisId}`,
   )
-  assert.equal(calls.length, 3)
+  assert.equal(calls.length, 4)
+  assert.ok(calls[3].url.endsWith('/result'))
 })
 
 test('cancelling a known job stops polling and requests server cancellation', async () => {
@@ -166,18 +168,11 @@ test('rejects invalid source counts, wrong identities, legacy responses and serv
     }),
     true,
   )
-  assert.equal(
-    api.isAnalysisJob({
-      ...completed,
-      result: { ...fixture, snapshotId: 'wrong' },
-    }),
-    false,
-  )
   for (const [body, status, error] of [
     [{ ...queued, snapshotId: 'wrong' }, 202, /다른 페이지/],
     [fixture, 200, /비동기/],
-    [{ error: '서버가 바쁩니다' }, 503, /서버가 바쁩니다/],
-    [{ error: '크기 초과' }, 413, /크기 초과/],
+    [{ detail: '서버가 바쁩니다' }, 503, /서버가 바쁩니다/],
+    [{ detail: '크기 초과' }, 413, /크기 초과/],
   ]) {
     const client = setup(() => response(body, status))
     await assert.rejects(
@@ -206,4 +201,22 @@ test('a failed job ends with server error, without another cancellation or poll'
     /출처 확인 실패/,
   )
   assert.equal(calls, 2)
+})
+
+test('rejects a result from a different snapshot without deleting a completed job', async () => {
+  const methods = []
+  const api = setup((url, init) => {
+    methods.push(init.method ?? 'GET')
+    return url.endsWith('/result')
+      ? response({ ...fixture, snapshotId: 'wrong-snapshot' })
+      : response(completed, init.method === 'POST' ? 202 : 200)
+  })
+  await assert.rejects(
+    api.createApiAnalyzer('https://api.example.test')(
+      snapshot,
+      new AbortController().signal,
+    ),
+    /다른 페이지/,
+  )
+  assert.deepEqual(methods, ['POST', 'GET'])
 })

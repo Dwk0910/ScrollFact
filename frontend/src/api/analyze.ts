@@ -1,5 +1,6 @@
 import {
   isAnalysisJob,
+  isAnalysisResponse,
   type AnalyzeDocument,
   type AnalysisJob,
   isRecord,
@@ -22,17 +23,22 @@ export function waitForPoll(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-async function readJob(response: Response): Promise<AnalysisJob> {
+async function readBody(response: Response): Promise<unknown> {
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(
-      isRecord(body) && typeof body.error === 'string'
-        ? body.error
+      isRecord(body) && typeof body.detail === 'string'
+        ? body.detail
         : response.status === 413
           ? '이 페이지는 분석할 수 있는 크기를 초과했습니다.'
           : '분석 서버에 연결하지 못했습니다. 다시 시도해 주세요.',
     )
   }
+  return body
+}
+
+async function readJob(response: Response): Promise<AnalysisJob> {
+  const body = await readBody(response)
   if (!isAnalysisJob(body))
     throw new Error('분석 작업의 응답 형식이 올바르지 않습니다.')
   return body
@@ -108,16 +114,23 @@ export function createApiAnalyzer(baseUrl: string): AnalyzeDocument {
         if (job.snapshotId !== snapshot.snapshotId || job.analysisId !== jobId)
           throw new Error('다른 페이지의 분석 작업이 도착했습니다.')
         if (job.status === 'completed') {
-          if (job.result.document.url !== snapshot.url)
-            throw new Error('다른 페이지의 분석 결과가 도착했습니다.')
           terminal = true
-          return job.result
-        }
-        if (job.status === 'failed' || job.status === 'cancelled') {
-          terminal = true
-          throw new Error(
-            job.status === 'failed' ? job.error : '분석 작업이 취소되었습니다.',
+          const result = await readBody(
+            await request(`${endpoint}/${encodeURIComponent(jobId)}/result`),
           )
+          if (!isAnalysisResponse(result))
+            throw new Error('분석 결과의 형식이 올바르지 않습니다.')
+          if (
+            result.analysisId !== jobId ||
+            result.snapshotId !== snapshot.snapshotId ||
+            result.document.url !== snapshot.url
+          )
+            throw new Error('다른 페이지의 분석 결과가 도착했습니다.')
+          return result
+        }
+        if (job.status === 'failed') {
+          terminal = true
+          throw new Error(job.error)
         }
         onProgress?.({
           phase: job.phase,
@@ -125,7 +138,7 @@ export function createApiAnalyzer(baseUrl: string): AnalyzeDocument {
           originalBytes: html.size,
           uploadedBytes: compressed.size,
         })
-        await waitForPoll(1500, signal)
+        await waitForPoll(2000, signal)
         job = await readJob(
           await request(`${endpoint}/${encodeURIComponent(jobId)}`),
         )

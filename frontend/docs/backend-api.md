@@ -1,6 +1,19 @@
-# ScrollFact 분석 API · v1
+# ScrollFact REST API · v1
+
+기계 판독용 계약: [OpenAPI 3.1](../../backend/ScrollFact/src/main/resources/static/openapi.yaml). 구현: Spring Boot + SQLite. AI 제공자는 `AnalysisEvaluator` 인터페이스로 교체한다.
 
 프론트엔드는 사용자가 분석 버튼을 누를 때 **현재 원문의 `document.documentElement.outerHTML` 전체**를 전달한다. 문단 분리, 요약, 주장 추출, 점수 산출, 판정, 근거 선택, watch 대상 결정은 모두 백엔드 책임이다. 프론트는 응답을 검증·표시하고 지정된 DOM 요소의 위치만 감지한다.
+
+## 리소스와 HTTP 의미
+
+| 메서드 | 경로 | 역할 | 성공 |
+| --- | --- | --- | --- |
+| POST | `/v1/analyses` | 압축 원문으로 분석 리소스 생성 | 202 + Location + Retry-After |
+| GET | `/v1/analyses/{analysisId}` | 처리 상태 조회 | 200 |
+| GET | `/v1/analyses/{analysisId}/result` | 완료 결과 조회 | 200, 미완료/실패는 409 |
+| DELETE | `/v1/analyses/{analysisId}` | 작업 중단 및 리소스/결과 삭제 | 204 |
+
+GET은 상태를 변경하지 않는다. DELETE는 멱등이며 이미 없는 ID에도 204를 반환한다. 삭제 후 상태/결과 GET은 404다. 생성은 비동기 처리이므로 분석 성공을 의미하지 않는다. URL에 analyze/cancel 같은 동사를 넣지 않고 리소스와 HTTP 메서드로 동작을 구분한다.
 
 ## 전송과 분석 비용
 
@@ -9,9 +22,9 @@ HTML을 JSON 문자열로 인라인 전송하던 방식을 **gzip 파일 업로�
 - 입력 범위는 현재 탭의 페이지 전체 스냅샷이다. 사이트의 모든 URL을 자동 순회한다는 의미는 아니다. 백엔드는 본문의 주장과 관련 출처 페이지를 분석한다.
 - 서버는 압축 해제 → HTML 파싱 → 본문/주장/출처 추출 → 출처 확인 → 문단별/전체 결과 생성 순서로 처리한다. 전체 HTML을 그대로 LLM 프롬프트에 넣지 않는다.
 - 스크립트·스타일·내비게이션 등은 서버에서 제외하고, watch 선택자는 **원래 DOM 구조 기준**으로 생성한다. DOM을 정리한 뒤 nth-of-type 경로를 새로 만들면 원문과 달라질 수 있다.
-- 같은 출처 URL은 중복 제거하고 URL/콘텐츠 해시/분석 버전 기반 캐시를 사용한다. 출처 수집은 제한된 동시성·출처별 타임아웃·전체 작업 기한을 둔다. 출처 안의 링크를 무제한 재귀 탐색하지 않는다.
+- 같은 출처 URL은 fragment를 제거해 중복을 줄이고, 성공적으로 읽은 출처 본문을 URL 기준 10분 동안 캐시한다(최대 100개). 분석 결과 캐시는 아직 없다. 출처 수집은 제한된 동시성·출처별 타임아웃·전체 작업 기한을 둔다. 출처 안의 링크를 무제한 재귀 탐색하지 않는다.
 - 출처를 가져오지 못하면 실패를 진행 상태에 반영하고, 해당 문단 이유에도 검증 한계를 명시한다. 확인하지 못한 출처를 검증 완료한 근거로 취급하지 않는다.
-- 출처 수집 시 http(s)만 허용하고 사설망·루프백·메타데이터 주소 및 그 주소로의 리다이렉트를 차단한다. 로그인 쿠키는 전달하지 않는다.
+- 출처 수집 시 http(s)만 허용하고 사설망·루프백·메타데이터 주소 및 그 주소로의 리다이렉트를 차단한다. 로그인 쿠키는 전달하지 않는다. 현재 수집기는 모든 HTTP 리다이렉트를 확인 실패로 처리하며 PDF는 읽지 않는다.
 
 ## 요청: 압축 파일로 접수
 
@@ -40,7 +53,7 @@ metadata:
 
 ## 작업 접수·진행 상태
 
-접수는 분석 완료를 기다리지 않고 **HTTP `202`**를 반환한다.
+접수는 분석 완료를 기다리지 않고 **HTTP `202`**를 반환한다. `Location: /v1/analyses/{id}`, `Retry-After: 2`, `Cache-Control: no-store`를 제공한다. AI 제공자가 미설정이면 리소스를 생성하지 않고 503으로 응답한다.
 
 ```json
 {
@@ -51,7 +64,7 @@ metadata:
 }
 ```
 
-`GET /v1/analyses/{analysisId}` → HTTP `200`. 프론트는 1.5초 간격으로 이전 응답을 받은 뒤 조회한다. 서버는 `Cache-Control: no-store`를 설정한다.
+`GET /v1/analyses/{analysisId}` → HTTP `200`. 프론트는 2초 간격으로 이전 응답을 받은 뒤 조회한다. 서버는 `Cache-Control: no-store`를 설정한다.
 
 ```json
 {
@@ -63,18 +76,17 @@ metadata:
 }
 ```
 
-- 상태: `queued`, `running`, `completed`, `failed`, `cancelled`.
+- 상태: `queued`, `running`, `completed`, `failed`. 삭제한 분석은 상태 대신 404를 반환한다.
 - 서버 단계: `queued`(접수/대기), `extracting`(본문·주장 분리), `checking_sources`(출처 확인), `summarizing`(결과 정리). `queued` 상태는 같은 이름의 단계만 사용한다. 단계는 이 순서로 진행한다.
 - 클라이언트 단계 `capturing`, `compressing`, `uploading`은 로컬 실제 작업에서 발생한다. 업로드 퍼센트나 예상 남은 시간은 추정하지 않는다.
 - `sources`는 선택 항목. `completed`는 성공/실패를 포함한 처리 완료 출처 수, `failed`는 그중 확인 실패 수다. 둘 다 음이 아닌 정수이며 `failed <= completed`.
 - `total`은 중복 제거된 확인 대상 수. 미확정이면 `null`, 확정되면 `completed` 이상의 정수다. 없는 값이나 null을 0/100%로 바꾸지 않는다.
 - 실패: `{ "analysisId": "...", "snapshotId": "...", "status": "failed", "error": "사용자에게 보여줄 설명" }`.
-- 취소: `{ "analysisId": "...", "snapshotId": "...", "status": "cancelled" }`.
 - 작업/스냅샷 ID는 모든 조회와 최종 결과에서 같아야 한다.
 
 ## 완료 결과
 
-GET 응답은 `{ "analysisId": "analysis-123", "snapshotId": "...", "status": "completed", "result": <아래 객체> }`다. 완료 결과 스키마는 기존 `1.0`을 유지하되 전송/작업 계약은 비호환 변경이다.
+상태 GET은 `{ "analysisId": "...", "snapshotId": "...", "status": "completed", "sources": { "completed": 5, "total": 5, "failed": 0 } }`를 반환한다. 결과를 인라인으로 포함하지 않는다. 클라이언트는 **GET `/v1/analyses/{analysisId}/result`**를 한 번 더 호출하여 아래 객체를 받는다. 결과 스키마는 `1.0`을 유지한다.
 
 ```json
 {
@@ -121,7 +133,7 @@ GET 응답은 `{ "analysisId": "analysis-123", "snapshotId": "...", "status": "c
 - `overview.summary`, 문단 `title`, `excerpt`, `summary`: 비어 있지 않은 문자열. 프론트에서 첫 문장 추출이나 요약을 하지 않는다.
 - `sections`: 원문 순서대로 배열. 백엔드가 나눈 문단마다 하나의 분석 페이지를 만든다. 비어 있으면 전체 분석과 문단 없음 안내를 표시한다.
 - `sections[].id`: 응답 내에서 고유한 비어 있지 않은 문자열. 페이지 이동과 원문 watch를 연결한다.
-- `selector`: 캡처한 원문에서 정확히 하나의 HTMLElement를 가리키는 유효한 CSS 선택자. 안정적인 기존 ID를 우선하고, 없으면 원문 DOM 경로를 사용한다. 새 ID를 만들어서 있다고 가정하지 않는다.
+- `selector`: 캡처한 원문에서 정확히 하나의 HTMLElement를 가리키는 유효한 CSS 선택자. 현재 서버는 원래 DOM의 태그별 형제 순번으로 `nth-of-type` 경로를 생성한다. 새 ID를 만들어서 있다고 가정하지 않는다.
 - `html`, `body`, `script`, `style`, `noscript`, `iframe`, ScrollFact 자체 호스트는 watch 대상으로 사용할 수 없다.
 - `reasons`, `sources`: 배열이며 없으면 `[]`. 빈 경우 각각 이유/출처가 없음을 표시한다.
 - 출처의 `title`, `publisher`는 비어 있지 않은 문자열이고 `url`은 절대 `http(s)` URL이어야 한다. 프론트는 링크만 표시하며 출처를 자동으로 요청하지 않는다.
@@ -149,25 +161,48 @@ GET 응답은 `{ "analysisId": "analysis-123", "snapshotId": "...", "status": "c
 
 ## 취소와 작업 수명
 
-`DELETE /v1/analyses/{analysisId}`는 멱등 취소 요청이다. 서버는 `202`로 접수하고 가능한 진행 작업·출처 요청을 중단한다. 이미 끝난 작업에는 `204`로 응답할 수 있다. 작업 ID는 추측하기 어렵게 발급하고, 인증 도입 시 작업 조회/취소 권한을 소유자로 제한한다.
+`DELETE /v1/analyses/{analysisId}`는 작업을 중단 요청하고 SQLite 분석 리소스와 결과를 제거한다. 항상 204를 반환하며 이후 GET은 404다. 이미 시작된 외부 요청은 자체 타임아웃까지 종료가 지연될 수 있다.
 
-프론트는 취소, 페이지 이동, 패널 닫기, 전체 시간 초과, 진행 중 오류 발생 시 알려진 작업 ID로 최선 노력 방식의 DELETE를 보낸다. 네트워크 단절 또는 ID 수신 전 취소는 서버 중단을 보장하지 않는다. 서버는 접수부터 최대 10분 작업 기한과 완료/실패 후 30분 보관 TTL을 두어 고아 작업을 정리해야 한다. 클라이언트는 자동 재접수하지 않고 사용자의 다시 분석으로 새 스냅샷을 만든다. 패널 닫기/새로고침 후 기존 작업 재연결은 현재 범위에 없다.
+프론트는 취소, 페이지 이동, 패널 닫기, 전체 시간 초과, 진행 중 오류 발생 시 알려진 작업 ID로 최선 노력 방식의 DELETE를 보낸다. 네트워크 단절 또는 ID 수신 전 취소는 서버 삭제를 보장하지 않는다. 작업은 접수부터 10분 후 실패 처리하고, 완료/실패 결과는 30분 후 정리한다(30초 주기). 삭제/만료 후에는 기존 Idempotency-Key 보관도 끝나므로 같은 키로 새 작업이 생성될 수 있다.
 
-## 오류
+결과와 진행 상태는 SQLite에 저장한다. 큐는 단일 프로세스의 메모리 큐이므로 서버 재시작 시 queued/running은 실패 상태로 전환한다. 프론트는 새로 분석하며 기존 작업 자동 재연결은 아직 없다. 작업 ID는 UUID로 발급한다. 현재 인증/소유자 구분은 없고 서버 기본 바인딩은 127.0.0.1이다. 공개 서비스 배포에는 인증과 소유자 권한 검사가 추가로 필요하다.
+
+## 오류: Problem Details
+
+HTTP 오류는 `Content-Type: application/problem+json`이다. 표준 필드 `type`, `title`, `status`, `detail`, `instance`와 애플리케이션 오류의 `code`를 사용한다. Spring이 처리하는 입력/메서드 오류에는 code가 없을 수 있다. 프론트는 `detail`을 표시한다.
 
 ```json
-{ "error": "사용자에게 보여줄 짧은 오류 설명" }
+{
+  "type": "urn:scrollfact:problem:evaluator_unconfigured",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.",
+  "instance": "/v1/analyses",
+  "code": "evaluator_unconfigured"
+}
 ```
 
-| HTTP | 예시 |
+| HTTP | 의미 |
 | --- | --- |
-| 400 | html 또는 URL 누락/잘못된 입력 |
-| 413 | 서버가 지원하는 HTML 크기 초과 |
-| 422 | 분석할 본문을 찾지 못함 |
-| 429 | 요청량 초과 |
-| 500 / 503 | 분석 실패 / 일시적인 서버 문제 |
+| 400 | gzip/UTF-8/메타데이터 오류, Idempotency-Key 불일치 |
+| 404 | 없는/삭제된/만료된 분석 |
+| 409 | 같은 키에 다른 입력, 아직 없는 완료 결과 |
+| 413 | 압축/해제 후 크기 초과 |
+| 415 | multipart 또는 metadata JSON 타입 오류 |
+| 422 | 빈 HTML 입력 |
+| 429 | 큐/보관 개수 상한, Retry-After: 5 |
+| 500 / 503 | 서버 오류 / 분석 제공자 미설정 |
 
-POST 성공은 202, GET 성공은 200이다. 만료/없는 작업은 404 또는 410을 반환한다. 과거의 POST 200 + 최종 결과 응답은 더 이상 지원하지 않는다. SSE/WebSocket/로그인은 포함하지 않는다.
+이미 접수된 작업에서 본문을 찾지 못하거나 출처/분석기 처리에 문제가 생기면 상태 GET은 HTTP 200 + `status: failed` + `error`를 반환한다. 상태 리소스 조회 성공과 분석 성공을 구분한다.
+
+## 현재 파이프라인과 제한
+
+- 본문: `p`, `li`, `blockquote`를 원문 순서로 분리한다. 스크립트·내비게이션·숨김 속성·확장 UI를 제외하며 중첩 블록은 가장 안쪽 문단을 선택한다. 렌더링 엔진 없이 HTML을 파싱하므로 CSS로만 숨겨진 요소나 특수한 div 기반 본문은 추가 개선이 필요하다.
+- 원문: 최대 200개 문단/본문 20만 자. 초과 시 작업을 실패시키며 임의로 생략하지 않는다.
+- 출처: 페이지에 실제로 링크된 http(s) 자료 최대 40개, 전체 동시 요청 4개, 호스트당 연결 2개. 성공한 출처만 인용 가능하다. 검색 엔진으로 독립 출처를 찾는 기능은 아직 없다.
+- 출처별: 최대 2 MiB/추출 텍스트 5만 자, HTTP 요청 15초 제한. 큰 문서·PDF·리다이렉트·차단된 주소는 실패 건수로 반영하고 결과의 판단 이유에 제한을 명시한다.
+- 분석 작업: 동시 2개 + 대기 8개, SQLite 보관 최대 1,000개. 다중 서버/분산 큐는 현재 범위에 없다.
+- AI: 본문과 출처 텍스트를 전달받는 제공자가 요약·점수·판정·이유를 생성한다. 백엔드는 문단 누락/중복, 점수 범위, 출처 조작을 검사하며 선택자/원문은 제공자가 바꾸지 못한다.
 
 ## 개발용 데이터와 서버 전환
 
@@ -184,6 +219,13 @@ VITE_API_BASE_URL=http://localhost:8080
 
 일반 웹 미리보기는 mock UI 확인용이다. API 모드의 실제 페이지 캡처는 Chrome 확장 프로그램에서 수행한다. API 서버는 확장 프로그램의 요청을 받을 수 있도록 접근 정책을 설정해야 한다. `VITE_` 값은 클라이언트에 노출되므로 비밀키를 넣지 않는다.
 
+## REST 개편의 기능 차이
+
+- 상태 응답의 result → 별도 `/result` 조회로 이동. 프론트도 수정.
+- DELETE 취소 접수(202) → 작업 중단 + 리소스 삭제(204), 이후 조회 404.
+- `{error}` HTTP 오류 → Problem Details의 `detail`로 변경. 비동기 실패의 `error` 필드는 유지.
+- AI 제공자 미설정 시 503. 서버에서 샘플 신뢰도 점수를 만들지 않는다.
+
 ## 압축·비동기 개편의 기능 차이
 
 - JSON의 HTML 문자열 → metadata + gzip 파일 multipart 업로드. HTML 내용은 유지.
@@ -191,7 +233,7 @@ VITE_API_BASE_URL=http://localhost:8080
 - 무제한 크기 → 20 MiB 원문/5 MiB gzip 상한, 조용한 잘림 없이 오류 안내.
 - 버튼 스피너 → 별도 분석 대기 화면, 실제 단계/경과 시간/출처 처리 건수 표시.
 - 60초 전체 대기 → 60초 개별 요청, 10분 전체 대기. 서버 작업 수명/취소 명세 추가.
-- 이 변경은 프론트와 계약만 구현했다. 백엔드의 압축 해제·작업 큐·캐시·출처 분석 구현은 별도다.
+- 백엔드의 압축 해제·작업 큐·SQLite 저장·출처 수집을 구현했다. AI 제공자는 미정이며 별도 어댑터 구현/설정이 필요하다.
 
 ## 기존 버전과의 기능 차이
 
@@ -213,3 +255,5 @@ VITE_API_BASE_URL=http://localhost:8080
 
 - [Compression Streams API](https://developer.mozilla.org/en-US/docs/Web/API/Compression_Streams_API): 브라우저 내 gzip 처리.
 - [HTTP 202 Accepted](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/202): 접수와 완료를 분리하는 HTTP 응답.
+
+- [Spring Problem Details](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html): HTTP 오류 응답.

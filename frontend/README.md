@@ -32,7 +32,7 @@ VITE_ANALYSIS_MODE=api
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-설정 후 개발 서버를 재시작합니다. 자세한 계약과 이전 버전과의 기능 차이는 [API 명세](docs/backend-api.md)에 있습니다. 백엔드 자체는 이 프론트 변경에 포함하지 않습니다.
+설정 후 개발 서버를 재시작합니다. 자세한 계약과 이전 버전과의 기능 차이는 [API 명세](docs/backend-api.md)에 있습니다. 백엔드 실행과 AI 제공자 연결은 [백엔드 안내](../backend/ScrollFact/README.md)를 참고하세요. AI 미설정 상태에서는 실제 분석 요청에 503을 반환합니다. 상태와 결과 조회는 별도 REST 리소스입니다.
 
 ## 검증 및 배포 빌드
 

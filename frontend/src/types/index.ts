@@ -167,9 +167,8 @@ export type AnalysisJob = JobIdentity &
         phase: ServerPhase
         sources?: SourceProgress
       }
-    | { status: 'completed'; result: AnalysisResponse }
+    | { status: 'completed' }
     | { status: 'failed'; error: string }
-    | { status: 'cancelled' }
   )
 
 export function isAnalysisJob(value: unknown): value is AnalysisJob {
@@ -179,14 +178,8 @@ export function isAnalysisJob(value: unknown): value is AnalysisJob {
     !nonempty(value.snapshotId)
   )
     return false
-  if (value.status === 'completed')
-    return (
-      isAnalysisResponse(value.result) &&
-      value.result.analysisId === value.analysisId &&
-      value.result.snapshotId === value.snapshotId
-    )
+  if (value.status === 'completed') return true
   if (value.status === 'failed') return nonempty(value.error)
-  if (value.status === 'cancelled') return true
   if (value.status !== 'queued' && value.status !== 'running') return false
   if (
     !['queued', 'extracting', 'checking_sources', 'summarizing'].includes(

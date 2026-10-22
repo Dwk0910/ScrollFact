@@ -1,0 +1,198 @@
+openapi: 3.1.0
+info:
+  title: ScrollFact Analysis API
+  version: 0.3.0
+  description: |
+    gzip HTML로 분석 리소스를 생성하고 상태와 완료 결과를 별도로 조회합니다.
+    현재 단일 프로세스 + SQLite 구현이며 AI 제공자는 AnalysisEvaluator로 교체합니다.
+    미설정 제공자는 POST 503으로 응답하며 샘플 점수를 생성하지 않습니다.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /v1/analyses:
+    post:
+      operationId: createAnalysis
+      summary: 분석 생성 및 큐 접수
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string, format: uuid}
+          description: metadata.snapshotId와 일치해야 합니다. 같은 입력은 기존 작업을 재사용합니다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [metadata, document]
+              properties:
+                metadata: {$ref: '#/components/schemas/Metadata'}
+                document:
+                  type: string
+                  format: binary
+                  description: UTF-8 outerHTML의 gzip 파일. 압축 최대 5 MiB, 해제 후 최대 20 MiB.
+            encoding:
+              metadata: {contentType: application/json}
+              document: {contentType: 'application/gzip, application/octet-stream'}
+      responses:
+        '202':
+          description: 분석 접수. 기존 동일 요청이 완료되었어도 202와 해당 리소스를 반환합니다.
+          headers:
+            Location: {schema: {type: string}, description: 생성/재사용한 분석의 상대 URL}
+            Retry-After: {schema: {type: integer, example: 2}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Analysis'}
+        '400': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+        '413': {$ref: '#/components/responses/Problem'}
+        '415': {$ref: '#/components/responses/Problem'}
+        '422': {$ref: '#/components/responses/Problem'}
+        '429': {$ref: '#/components/responses/Problem'}
+        '503': {$ref: '#/components/responses/Problem'}
+  /v1/analyses/{analysisId}:
+    parameters:
+      - {$ref: '#/components/parameters/AnalysisId'}
+    get:
+      operationId: getAnalysis
+      summary: 분석 상태 조회
+      responses:
+        '200':
+          description: 상태 조회 성공. 분석 자체의 실패는 status=failed와 error로 표시합니다.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Analysis'}
+        '404': {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: deleteAnalysis
+      summary: 분석 중단 및 리소스 삭제
+      responses:
+        '204':
+          description: 리소스가 삭제됨. 이미 없는 ID도 204. 이후 GET은 404.
+  /v1/analyses/{analysisId}/result:
+    parameters:
+      - {$ref: '#/components/parameters/AnalysisId'}
+    get:
+      operationId: getAnalysisResult
+      summary: 완료 결과 조회
+      responses:
+        '200':
+          description: 검증된 분석 결과
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalysisResult'}
+        '404': {$ref: '#/components/responses/Problem'}
+        '409': {$ref: '#/components/responses/Problem'}
+components:
+  parameters:
+    AnalysisId:
+      in: path
+      name: analysisId
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    Problem:
+      description: HTTP 처리 오류. 사용자에게 detail을 표시합니다.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+  schemas:
+    Metadata:
+      type: object
+      required: [snapshotId, url, title, htmlBytes, encoding]
+      properties:
+        snapshotId: {type: string, format: uuid}
+        url: {type: string, format: uri, maxLength: 8192, pattern: '^https?://'}
+        title: {type: string, maxLength: 2000}
+        htmlBytes: {type: integer, minimum: 1, maximum: 20971520}
+        encoding: {type: string, const: gzip}
+    Analysis:
+      type: object
+      required: [analysisId, snapshotId, status]
+      properties:
+        analysisId: {type: string, format: uuid}
+        snapshotId: {type: string, format: uuid}
+        status: {type: string, enum: [queued, running, completed, failed]}
+        phase:
+          type: string
+          enum: [queued, extracting, checking_sources, summarizing]
+          description: queued/running에만 존재합니다.
+        sources: {$ref: '#/components/schemas/SourceProgress'}
+        error: {type: string, description: failed 상태의 사용자 설명}
+      allOf:
+        - if:
+            properties:
+              status: {enum: [queued, running]}
+          then:
+            required: [phase]
+        - if:
+            properties:
+              status: {const: failed}
+          then:
+            required: [error]
+    SourceProgress:
+      type: object
+      required: [completed, total, failed]
+      properties:
+        completed: {type: integer, minimum: 0, description: 성공과 실패를 포함한 처리 완료 건수}
+        total: {type: [integer, 'null'], minimum: 0, description: 중복 제거 후 대상 수. completed 이상이며 미확정이면 null.}
+        failed: {type: integer, minimum: 0, description: completed 이하인 확인 실패 건수}
+    DocumentInfo:
+      type: object
+      required: [url, title]
+      properties:
+        url: {type: string, format: uri}
+        title: {type: string, minLength: 1}
+    Assessment:
+      type: object
+      required: [score, status, summary]
+      properties:
+        score: {type: integer, minimum: 0, maximum: 100}
+        status: {type: string, enum: [high, good, caution, low, danger]}
+        summary: {type: string, minLength: 1}
+    Reason:
+      type: object
+      required: [title, detail]
+      properties:
+        title: {type: string, minLength: 1}
+        detail: {type: string, minLength: 1}
+    SourceLink:
+      type: object
+      required: [title, publisher, url]
+      properties:
+        title: {type: string, minLength: 1}
+        publisher: {type: string, minLength: 1}
+        url: {type: string, format: uri, pattern: '^https?://'}
+    Section:
+      allOf:
+        - {$ref: '#/components/schemas/Assessment'}
+        - type: object
+          required: [id, selector, title, excerpt, reasons, sources]
+          properties:
+            id: {type: string, minLength: 1}
+            selector: {type: string, minLength: 1, description: 원래 DOM의 고유 CSS 경로}
+            title: {type: string, minLength: 1}
+            excerpt: {type: string, minLength: 1}
+            reasons: {type: array, items: {$ref: '#/components/schemas/Reason'}}
+            sources: {type: array, items: {$ref: '#/components/schemas/SourceLink'}}
+    AnalysisResult:
+      type: object
+      required: [schemaVersion, analysisId, snapshotId, document, overview, sections]
+      properties:
+        schemaVersion: {type: string, const: '1.0'}
+        analysisId: {type: string, format: uuid}
+        snapshotId: {type: string, format: uuid}
+        document: {$ref: '#/components/schemas/DocumentInfo'}
+        overview: {$ref: '#/components/schemas/Assessment'}
+        sections: {type: array, maxItems: 200, items: {$ref: '#/components/schemas/Section'}}
+    Problem:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string}
+        instance: {type: string, format: uri-reference}
+        code: {type: string, description: 애플리케이션 오류 코드. Spring 입력 검증 오류에서는 생략 가능.}
