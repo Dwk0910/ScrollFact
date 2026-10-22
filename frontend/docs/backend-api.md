@@ -31,7 +31,7 @@ HTML을 JSON 문자열로 인라인 전송하던 방식을 **gzip 파일 업로�
 `POST {VITE_API_BASE_URL}/v1/analyses`
 
 - `Content-Type: multipart/form-data; boundary=...` — 브라우저 FormData가 생성하므로 직접 설정하지 않는다.
-- `Idempotency-Key: <snapshotId>` — 같은 키로 다시 접수하면 기존 작업을 반환하며 중복 작업을 만들지 않는다. 같은 키에 다른 입력이면 `409`.
+- `Idempotency-Key: <snapshotId>` — 같은 키로 다시 접수하면 기존 작업을 반환하며 중복 작업을 만들지 않는다. 같은 키에 다른 입력(처리 mode 포함)이면 `409`.
 - `metadata`: `metadata.json`, `application/json` 파트.
 - `document`: `document.html.gz`, gzip 압축 바이너리 파트. base64로 변환하지 않는다. 요청 전체의 `Content-Encoding`은 설정하지 않는다.
 
@@ -257,3 +257,36 @@ VITE_API_BASE_URL=http://localhost:8080
 - [HTTP 202 Accepted](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/202): 접수와 완료를 분리하는 HTTP 응답.
 
 - [Spring Problem Details](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-rest-exceptions.html): HTTP 오류 응답.
+
+
+## AI 없는 연결 점검 (`mode: diagnostic`)
+
+metadata에 `"mode": "diagnostic"`을 명시하면 같은 REST 리소스와 gzip 업로드·작업 큐·문단 파서·출처 수집기를 사용하되 AI 평가를 생략한다. 생략하거나 `analysis`를 보내면 기존 분석 동작을 유지하며, AI 미설정 시 `503 evaluator_unconfigured`다. 알 수 없는 mode는 `400 invalid_mode`다. 동일 snapshotId의 mode를 바꾸면 409이므로 새 UUID를 발급해야 한다.
+
+점검은 `queued → extracting → checking_sources → completed`로 끝나며 `summarizing` 단계가 없다. `completed`는 수집 작업이 끝났다는 뜻이며 팩트체크 성공이나 출처의 신뢰도를 뜻하지 않는다. 일부 출처가 실패해도 모든 출처를 처리한 뒤 완료되며 `sources.failed`에 집계한다. 결과 대기 중 409, 취소 DELETE 204, 이후 조회 404, 보관 기한 30분은 기존과 같다.
+
+`GET /v1/analyses/{id}/result`의 점검 응답 예시:
+
+```json
+{
+  "schemaVersion": "1.0",
+  "kind": "diagnostic",
+  "analysisId": "서버가 발급한 UUID",
+  "snapshotId": "요청의 UUID",
+  "document": { "url": "https://example.com/article", "title": "원문 제목" },
+  "htmlBytes": 2048,
+  "passages": [
+    { "id": "section-1", "selector": "html > body > article > p", "text": "추출한 원문" }
+  ],
+  "sources": [
+    { "url": "https://example.org/", "title": "공개 문서", "textCharacters": 156 },
+    { "url": "http://127.0.0.1/", "title": "", "textCharacters": 0, "failure": "공개 인터넷 주소가 아닌 출처" }
+  ]
+}
+```
+
+`overview`, `score`, `summary`, 판정 이유는 반환하지 않는다. `textCharacters`는 수집한 출처 본문의 Java UTF-16 길이이며 바이트 수가 아니다. 보고서에 출처 전문은 포함하지 않는다.
+
+브라우저 점검 주소는 `http://127.0.0.1:5173/integration.html`. 루트 `src/integration/main.tsx`의 입력 예제 문서를 iframe으로 보여주고 해당 문서의 실제 `document.documentElement.outerHTML`을 전송한다. 예상 응답이나 가짜 진행 상태는 사용하지 않는다. 공개 URL 2개와 중복 링크, 차단 대상 내부 주소를 포함하며 실행 시 외부 공개 문서를 실제로 읽는다. 백엔드 주소는 `VITE_API_BASE_URL`(미설정이면 `http://127.0.0.1:8080`)이다.
+
+점검 화면과 실제 확장 UI는 공용 API 클라이언트·취소 로직·로딩 화면을 사용한다. 기존 `/`의 샘플 분석 UI와 확장 프로그램의 분석 모드는 유지한다. 점검 화면에서 받은 CSS 선택자의 원문 일치 여부와 문단 이동을 확인할 수 있다. 2초 폴링 사이에 끝난 중간 단계는 표시되지 않을 수 있으며 임의 지연을 넣지 않는다.

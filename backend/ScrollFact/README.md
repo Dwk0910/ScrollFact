@@ -33,6 +33,16 @@ Spring Boot 3.5 + SQLite 기반 비동기 분석 REST API. 원문 처리/출처 
 
 [상세 명세](../../frontend/docs/backend-api.md) · [OpenAPI](src/main/resources/static/openapi.yaml). 실행 중 `/openapi.yaml`에서도 확인할 수 있습니다. HTTP 오류는 Problem Details입니다.
 
+## AI 없이 프론트 연결 점검
+
+1. 루트에서 `./gradlew :backend:bootRun`을 실행합니다. AI 관련 환경변수는 필요 없습니다.
+2. 별도 터미널에서 `cd frontend && npm run dev`를 실행합니다.
+3. `http://127.0.0.1:5173/integration.html`에서 **업로드부터 점검하기**를 누릅니다.
+
+`mode: diagnostic`으로 실제 HTML gzip 업로드, 문단 추출, 출처 수집과 상태 조회를 실행합니다. AI 요약·신뢰도 점수는 만들지 않습니다. 결과에는 문단의 원문/선택자와 출처별 수집 성공/실패가 들어갑니다. 기본 analysis 모드의 AI 미설정 503 동작은 유지합니다. 입력 예제는 프론트 루트 TSX에서 관리하고 공용 API 클라이언트와 로딩 화면을 사용합니다.
+
+점검용 DB를 따로 쓰려면 `SCROLLFACT_DB_URL=jdbc:sqlite:/private/tmp/scrollfact-integration.db ./gradlew :backend:bootRun`으로 실행합니다. 프론트 API 검증은 `cd frontend && npm run test:api`입니다. 백엔드 실행 후 `npm run test:live`를 실행하면 같은 프론트 클라이언트로 실제 업로드·조회·CORS·중복 요청·취소를 검증합니다. 공개 출처를 실제 요청하며 테스트 결과는 서버 보관 기한 뒤 삭제됩니다. 이 검사는 브라우저 클릭이나 화면 배치를 검증하지 않습니다.
+
 ## AI 제공자 연결
 
 `analysis/AnalysisEvaluator.java`를 구현하면 파이프라인과 HTTP API를 바꾸지 않고 제공자를 교체할 수 있습니다. 기본 `HttpAnalysisEvaluator`는 외부 어댑터에 아래 JSON을 POST합니다. **이 URL은 OpenAI/Gemini 등의 원래 API 주소를 직접 받는 설정이 아닙니다.** 제공자 SDK를 쓰는 Java 구현을 만들거나, 아래 계약을 해당 제공자 API로 변환하는 별도 서비스를 연결합니다.
@@ -62,7 +72,7 @@ Spring Boot 3.5 + SQLite 기반 비동기 분석 REST API. 원문 처리/출처 
 }
 ```
 
-score는 0–100 정수, status는 high/good/caution/low/danger. 반환할 문단 ID는 입력과 정확히 일치해야 합니다. sourceUrls에는 성공적으로 수집한 출처 URL만 사용할 수 있습니다. 선택자·원문 발췌는 서버가 원본에서 채웁니다. 설정이 없으면 POST가 `503 evaluator_unconfigured`로 실패하며 임의 점수를 생성하지 않습니다. 테스트의 모의 분석기는 테스트 컨텍스트에서만 사용합니다.
+score는 0–100 정수, status는 high/good/caution/low/danger. 반환할 문단 ID는 입력과 정확히 일치해야 합니다. sourceUrls에는 성공적으로 수집한 출처 URL만 사용할 수 있습니다. 선택자·원문 발췌는 서버가 원본에서 채웁니다. 기본 analysis 모드에서 설정이 없으면 POST가 `503 evaluator_unconfigured`로 실패하며 임의 점수를 생성하지 않습니다. 테스트의 모의 분석기는 테스트 컨텍스트에서만 사용합니다.
 
 ## 현재 범위
 

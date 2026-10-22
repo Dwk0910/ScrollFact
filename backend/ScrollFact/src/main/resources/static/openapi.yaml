@@ -1,11 +1,12 @@
 openapi: 3.1.0
 info:
   title: ScrollFact Analysis API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     gzip HTML로 분석 리소스를 생성하고 상태와 완료 결과를 별도로 조회합니다.
     현재 단일 프로세스 + SQLite 구현이며 AI 제공자는 AnalysisEvaluator로 교체합니다.
-    미설정 제공자는 POST 503으로 응답하며 샘플 점수를 생성하지 않습니다.
+    기본 analysis 모드에서 미설정 제공자는 POST 503으로 응답합니다.
+    diagnostic 모드는 AI 없이 업로드·문단 추출·출처 수집만 점검하며 점수를 생성하지 않습니다.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -81,7 +82,10 @@ paths:
           description: 검증된 분석 결과
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AnalysisResult'}
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/AnalysisResult'}
+                  - {$ref: '#/components/schemas/DiagnosticResult'}
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
 components:
@@ -107,6 +111,11 @@ components:
         title: {type: string, maxLength: 2000}
         htmlBytes: {type: integer, minimum: 1, maximum: 20971520}
         encoding: {type: string, const: gzip}
+        mode:
+          type: string
+          enum: [analysis, diagnostic]
+          default: analysis
+          description: diagnostic은 AI 평가 없이 문단·출처 처리 보고서를 반환합니다. mode가 다른 동일 키 요청은 409입니다.
     Analysis:
       type: object
       required: [analysisId, snapshotId, status]
@@ -186,6 +195,37 @@ components:
         document: {$ref: '#/components/schemas/DocumentInfo'}
         overview: {$ref: '#/components/schemas/Assessment'}
         sections: {type: array, maxItems: 200, items: {$ref: '#/components/schemas/Section'}}
+    DiagnosticResult:
+      type: object
+      required: [schemaVersion, kind, analysisId, snapshotId, document, htmlBytes, passages, sources]
+      properties:
+        schemaVersion: {type: string, const: '1.0'}
+        kind: {type: string, const: diagnostic}
+        analysisId: {type: string, format: uuid}
+        snapshotId: {type: string, format: uuid}
+        document: {$ref: '#/components/schemas/DocumentInfo'}
+        htmlBytes: {type: integer, minimum: 1, maximum: 20971520}
+        passages:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [id, selector, text]
+            properties:
+              id: {type: string}
+              selector: {type: string, description: 원래 DOM의 고유 CSS 경로}
+              text: {type: string, description: 추출한 원문이며 AI 요약이 아닙니다.}
+        sources:
+          type: array
+          maxItems: 40
+          items:
+            type: object
+            required: [url, title, textCharacters]
+            properties:
+              url: {type: string, format: uri}
+              title: {type: string}
+              textCharacters: {type: integer, minimum: 0, description: 수집한 본문의 Java UTF-16 길이}
+              failure: {type: string, description: 수집 실패 이유. 성공하면 생략됩니다.}
     Problem:
       type: object
       required: [type, title, status, detail]
