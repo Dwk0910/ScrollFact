@@ -1,19 +1,7 @@
-import { trustTone, type TrustTone } from '../trust'
+import { trustTone, trustToneClass, trustToneLabel } from '../trust'
 
 interface TrustScoreBarProps {
   score: number
-}
-
-const fillClass: Record<TrustTone, string> = {
-  high: 'bg-emerald-600',
-  mid: 'bg-amber-500',
-  low: 'bg-rose-600',
-}
-
-const label: Record<TrustTone, string> = {
-  high: '높음',
-  mid: '보통',
-  low: '낮음',
 }
 
 export function TrustScoreBar({ score }: TrustScoreBarProps) {
@@ -26,7 +14,7 @@ export function TrustScoreBar({ score }: TrustScoreBarProps) {
         <span className="text-xs font-medium text-stone-500">신뢰 점수</span>
         <span className="text-sm font-semibold text-ink tabular-nums">
           {clamped}
-          <span className="ml-1 text-xs font-normal text-stone-400">/ 100 · {label[tone]}</span>
+          <span className="ml-1 text-xs font-normal text-stone-400">/ 100 · {trustToneLabel[tone]}</span>
         </span>
       </div>
       <div
@@ -36,10 +24,10 @@ export function TrustScoreBar({ score }: TrustScoreBarProps) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={clamped}
-        aria-valuetext={`${clamped}점, ${label[tone]}`}
+        aria-valuetext={`${clamped}점, ${trustToneLabel[tone]}`}
       >
         <div
-          className={`h-full rounded-full transition-[width] duration-500 ${fillClass[tone]}`}
+          className={`h-full rounded-full transition-[width] duration-500 ${trustToneClass[tone]}`}
           style={{ width: `${clamped}%` }}
         />
       </div>

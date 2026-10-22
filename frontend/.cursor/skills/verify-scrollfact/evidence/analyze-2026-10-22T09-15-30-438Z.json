@@ -1,0 +1,17 @@
+{
+  "journey": "analyze",
+  "results": [
+    {
+      "name": "analyze completes with brief and neighbors",
+      "passed": true
+    },
+    {
+      "name": "overview shows progress distribution claims terms sources",
+      "passed": true
+    },
+    {
+      "name": "next button moves to second paragraph",
+      "passed": true
+    }
+  ]
+}

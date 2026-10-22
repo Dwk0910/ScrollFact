@@ -1,0 +1,13 @@
+{
+  "journey": "login-guard",
+  "results": [
+    {
+      "name": "preview login shows extension only message",
+      "passed": true
+    },
+    {
+      "name": "preview shows no redirect url",
+      "passed": true
+    }
+  ]
+}

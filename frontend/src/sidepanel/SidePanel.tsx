@@ -39,8 +39,9 @@ export function SidePanel() {
     setGoogleLoading(true)
     setAuthError(null)
     try {
-      const code = await requestAuthorizationCode()
-      setAuthCode(code)
+      const authorized = await requestAuthorizationCode()
+      console.log(authorized.code)
+      setAuthCode(authorized.code)
     } catch (caught) {
       setAuthCode(null)
       setAuthError(caught instanceof Error ? caught.message : 'Google 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.')

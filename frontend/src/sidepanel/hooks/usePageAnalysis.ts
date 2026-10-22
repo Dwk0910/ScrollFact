@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { mockAnalyses } from '../../mock/mockData'
 import {
   isActiveParagraphMessage,
-  isActiveParagraphPayload,
   isCurrentSuccessResponse,
+  isErrorResponse,
   isPageHtmlSuccessResponse,
   isParseSuccessResponse,
   MessageType,
@@ -73,6 +73,7 @@ function buildPreviewPayload(index: number): ActiveParagraphPayload {
 export function usePageAnalysis() {
   const inExtension = isExtensionContext()
   const tabIdRef = useRef<number | null>(null)
+  const generationRef = useRef(0)
   const [status, setStatus] = useState<AnalysisStatus>('ready')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -108,18 +109,30 @@ export function usePageAnalysis() {
       return
     }
 
+    const generation = generationRef.current + 1
+    generationRef.current = generation
+
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (generation !== generationRef.current) return
       if (tab?.id == null) {
         setStatus('error')
         setError('활성 탭을 찾지 못했습니다.')
         return
       }
 
-      tabIdRef.current = tab.id
-      const response: unknown = await chrome.tabs.sendMessage(tab.id, {
+      const tabId = tab.id
+      tabIdRef.current = tabId
+      const response: unknown = await chrome.tabs.sendMessage(tabId, {
         type: MessageType.requestParse,
       })
+      if (generation !== generationRef.current || tabIdRef.current !== tabId) return
+
+      if (isErrorResponse(response)) {
+        setStatus('error')
+        setError(response.error)
+        return
+      }
 
       if (!isParseSuccessResponse(response)) {
         setStatus('error')
@@ -132,12 +145,17 @@ export function usePageAnalysis() {
       if (!response.payload.active) {
         setActive(null)
         setStatus('done')
-        setNotice('이 페이지에서 본문 문단을 찾지 못했습니다.')
+        setNotice(
+          response.payload.paragraphs.length > 0
+            ? '문단은 찾았지만 아직 화면 가운데에 있는 문단이 없습니다.'
+            : '이 페이지에서 본문 문단을 찾지 못했습니다.',
+        )
         return
       }
 
       applyPayload(response.payload.active)
     } catch {
+      if (generation !== generationRef.current) return
       setStatus('error')
       setError('이 탭을 분석할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.')
     }
@@ -172,6 +190,11 @@ export function usePageAnalysis() {
         type: MessageType.getPageHtml,
       })
 
+      if (isErrorResponse(response)) {
+        setError(response.error)
+        return
+      }
+
       if (!isPageHtmlSuccessResponse(response)) {
         setError('페이지 HTML 응답을 해석하지 못했습니다.')
         return
@@ -191,57 +214,62 @@ export function usePageAnalysis() {
 
     let cancelled = false
 
-    const restoreFromTab = async (tabId: number, url?: string) => {
+    const resetView = () => {
+      setActive(null)
+      setParagraphs([])
+      setPageTitle('')
+      setStatus('ready')
+      setError(null)
+      setNotice(null)
+    }
+
+    const restoreFromTab = async (tabId: number, generation: number) => {
       try {
         const response: unknown = await chrome.tabs.sendMessage(tabId, {
           type: MessageType.getCurrent,
         })
-        if (cancelled || !isCurrentSuccessResponse(response)) return
+        if (cancelled || generation !== generationRef.current || tabIdRef.current !== tabId) return
+        if (!isCurrentSuccessResponse(response)) return
         const restored = readParagraphs(response.paragraphs)
         if (restored.length > 0) setParagraphs(restored)
         if (!response.payload) return
         applyPayload(response.payload)
-        return
       } catch {
-        const cached: unknown = await chrome.runtime.sendMessage({
-          type: MessageType.getActiveParagraph,
-          tabId,
-        })
-        if (cancelled || !isActiveParagraphPayload(cached)) return
-        if (url && cached.url !== url) return
-        applyPayload(cached)
+        return
       }
     }
 
     const onMessage = (message: unknown, sender: chrome.runtime.MessageSender) => {
       if (!isActiveParagraphMessage(message)) return
-      const senderTabId = sender.tab?.id
-      if (tabIdRef.current != null && senderTabId !== tabIdRef.current) return
+      const hostTabId = tabIdRef.current
+      if (hostTabId == null || sender.tab?.id !== hostTabId) return
       applyPayload(message.payload)
     }
 
     const onActivated = (info: chrome.tabs.OnActivatedInfo) => {
-      tabIdRef.current = info.tabId
-      setActive(null)
-      setParagraphs([])
-      setPageTitle('')
-      setStatus('ready')
-      setError(null)
-      setNotice(null)
-      void chrome.tabs.get(info.tabId).then((tab) => {
-        if (cancelled) return
-        return restoreFromTab(info.tabId, tab.url)
-      })
+      const boundId = tabIdRef.current
+      if (boundId == null || info.tabId === boundId) return
+
+      const generationAtLookup = generationRef.current
+      void chrome.tabs.get(boundId).then(
+        (bound) => {
+          if (cancelled || generationRef.current !== generationAtLookup || tabIdRef.current !== boundId) return
+          if (bound.windowId == null || info.windowId !== bound.windowId) return
+
+          const generation = generationRef.current + 1
+          generationRef.current = generation
+          tabIdRef.current = info.tabId
+          resetView()
+          void restoreFromTab(info.tabId, generation)
+        },
+        () => undefined,
+      )
     }
 
     const onUpdated = (updatedTabId: number, changeInfo: chrome.tabs.OnUpdatedInfo) => {
       if (updatedTabId !== tabIdRef.current || changeInfo.status !== 'loading') return
-      setActive(null)
-      setParagraphs([])
-      setPageTitle('')
-      setStatus('ready')
-      setError(null)
-      setNotice(null)
+      generationRef.current += 1
+      resetView()
     }
 
     chrome.runtime.onMessage.addListener(onMessage)
@@ -249,13 +277,14 @@ export function usePageAnalysis() {
     chrome.tabs.onUpdated.addListener(onUpdated)
 
     void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      if (cancelled || tab?.id == null) return
+      if (cancelled || tab?.id == null || tabIdRef.current != null) return
       tabIdRef.current = tab.id
-      return restoreFromTab(tab.id, tab.url)
+      return restoreFromTab(tab.id, generationRef.current)
     })
 
     return () => {
       cancelled = true
+      generationRef.current += 1
       chrome.runtime.onMessage.removeListener(onMessage)
       chrome.tabs.onActivated.removeListener(onActivated)
       chrome.tabs.onUpdated.removeListener(onUpdated)

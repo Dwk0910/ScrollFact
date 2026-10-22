@@ -1,24 +1,12 @@
 import { ExternalLink } from 'lucide-react'
 import { getAnalysisForIndex } from '../../mock/mockData'
 import type { ParsedParagraph, SourceLink } from '../../types'
-import { trustTone } from '../trust'
+import { trustTone, trustToneClass, trustToneLabel } from '../trust'
 
 interface ArticleOverviewProps {
   paragraphs: readonly ParsedParagraph[]
   activeIndex: number | null
 }
-
-const toneLabel = {
-  high: '높음',
-  mid: '보통',
-  low: '낮음',
-} as const
-
-const toneClass = {
-  high: 'bg-emerald-600',
-  mid: 'bg-amber-500',
-  low: 'bg-rose-600',
-} as const
 
 function collectSources(count: number): SourceLink[] {
   const seen = new Set<string>()
@@ -67,9 +55,9 @@ export function ArticleOverview({ paragraphs, activeIndex }: ArticleOverviewProp
         <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
           {(['high', 'mid', 'low'] as const).map((tone) => (
             <div key={tone} className="rounded-xl bg-stone-50 px-2 py-2">
-              <dt className="text-[11px] text-stone-500">{toneLabel[tone]}</dt>
+              <dt className="text-[11px] text-stone-500">{trustToneLabel[tone]}</dt>
               <dd className="mt-1 text-lg font-semibold text-ink tabular-nums">{spread[tone]}</dd>
-              <div className={`mx-auto mt-1 h-1 w-8 rounded-full ${toneClass[tone]}`} />
+              <div className={`mx-auto mt-1 h-1 w-8 rounded-full ${trustToneClass[tone]}`} />
             </div>
           ))}
         </dl>
@@ -92,7 +80,7 @@ export function ArticleOverview({ paragraphs, activeIndex }: ArticleOverviewProp
                   <span className="font-semibold text-ink tabular-nums">{analysis.trustScore}</span>
                 </p>
                 <p className="mt-1 text-sm leading-6 text-ink">{analysis.keyClaim}</p>
-                <span className={`mt-1 inline-block h-1 w-8 rounded-full ${toneClass[tone]}`} />
+                <span className={`mt-1 inline-block h-1 w-8 rounded-full ${trustToneClass[tone]}`} />
               </li>
             )
           })}

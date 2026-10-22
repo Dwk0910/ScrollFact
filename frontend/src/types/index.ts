@@ -2,7 +2,6 @@ export const MessageType = {
   requestParse: 'REQUEST_PARSE',
   getCurrent: 'GET_CURRENT',
   activeParagraphChanged: 'ACTIVE_PARAGRAPH_CHANGED',
-  getActiveParagraph: 'GET_ACTIVE_PARAGRAPH',
   togglePanel: 'TOGGLE_PANEL',
   getPageHtml: 'GET_PAGE_HTML',
 } as const
@@ -63,11 +62,6 @@ export interface ActiveParagraphMessage {
   payload: ActiveParagraphPayload
 }
 
-export interface GetActiveParagraphMessage {
-  type: typeof MessageType.getActiveParagraph
-  tabId: number
-}
-
 export interface ParseSuccessResponse {
   ok: true
   payload: ParseResultPayload
@@ -119,14 +113,8 @@ export function isActiveParagraphMessage(value: unknown): value is ActiveParagra
   )
 }
 
-export function isGetActiveParagraphMessage(
-  value: unknown,
-): value is GetActiveParagraphMessage {
-  return (
-    isRecord(value) &&
-    value.type === MessageType.getActiveParagraph &&
-    typeof value.tabId === 'number'
-  )
+export function isErrorResponse(value: unknown): value is ErrorResponse {
+  return isRecord(value) && value.ok === false && typeof value.error === 'string'
 }
 
 export function isParseSuccessResponse(value: unknown): value is ParseSuccessResponse {
