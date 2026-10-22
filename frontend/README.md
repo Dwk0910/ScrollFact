@@ -9,9 +9,9 @@ npm ci
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-`http://127.0.0.1:5173/`에서 UI를 확인합니다. 분석 버튼을 누르면 전체 신뢰도 게이지와 문단별 페이지가 나타납니다. 스크롤·하단 탐색 버튼으로 이동합니다.
+`http://127.0.0.1:5173/`에서 UI를 확인합니다. 분석 버튼을 누르면 별도 대기 화면에서 단계·경과 시간·출처 처리 건수를 보여 준 뒤 전체 신뢰도 게이지와 문단별 페이지가 나타납니다. 샘플은 약 12초 동안 진행 단계를 시연합니다. 스크롤·하단 탐색 버튼으로 이동합니다.
 
-예상 백엔드 응답은 루트 파일 `src/sidepanel/main.tsx`의 `window.SCROLLFACT_MOCK_RESPONSE`에 있습니다. 컴포넌트별 mock은 없습니다. 콘솔에서 객체를 바꾼 뒤 다시 분석할 수도 있습니다.
+예상 백엔드 응답은 루트 파일 `src/sidepanel/main.tsx`의 `window.SCROLLFACT_MOCK_RESPONSE`에 있습니다. 진행 단계와 지연은 같은 파일의 `window.SCROLLFACT_MOCK_PROGRESS`에서 조절합니다. 컴포넌트별 mock은 없습니다. 콘솔에서 객체를 바꾼 뒤 다시 분석할 수도 있습니다.
 
 ## 원문 스크롤 연동
 
@@ -36,6 +36,7 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ```bash
 npm run lint
+node --test tests/api.test.mjs
 npm run build
 ```
 

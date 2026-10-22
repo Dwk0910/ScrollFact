@@ -171,7 +171,7 @@ POST 성공은 202, GET 성공은 200이다. 만료/없는 작업은 404 또는 
 
 ## 개발용 데이터와 서버 전환
 
-샘플 응답은 **`src/sidepanel/main.tsx`의 `window.SCROLLFACT_MOCK_RESPONSE` 한 곳**에만 있다. UI 컴포넌트는 이 객체를 import하거나 샘플 데이터를 직접 만들지 않는다. 콘솔에서 객체를 수정하고 `다시 분석`을 눌러 상태를 확인할 수 있다.
+샘플 응답은 **`src/sidepanel/main.tsx`의 `window.SCROLLFACT_MOCK_RESPONSE` 한 곳**에만 있다. UI 컴포넌트는 이 객체를 import하거나 샘플 데이터를 직접 만들지 않는다. 단계별 예상 진행 응답과 지연은 같은 루트의 `window.SCROLLFACT_MOCK_PROGRESS`에서 관리한다. 콘솔에서 객체를 수정하고 `다시 분석`을 눌러 상태를 확인할 수 있다.
 
 기본 모드는 `mock`. 분석 시 실제 서버 요청은 하지 않고, 이 객체의 복사본을 응답으로 사용한다. 요청 식별자와 URL만 현재 캡처에 맞춘다. 화면에는 항상 샘플임을 표시한다. `public/demo.html`의 `#sf-demo-p1`–`#sf-demo-p4`가 샘플 선택자와 대응한다. 다른 기사에 샘플을 적용하면 위치를 찾지 못했다는 안내가 뜨는 것이 정상이다.
 

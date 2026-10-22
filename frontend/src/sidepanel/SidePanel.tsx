@@ -14,13 +14,13 @@ import {
   ChevronRight,
   CircleHelp,
   Link2,
-  LoaderCircle,
   RefreshCw,
   ScanLine,
   ShieldCheck,
   TriangleAlert,
 } from 'lucide-react'
 import type { AnalysisResponse, AnalyzeDocument } from '../types'
+import { AnalysisLoading } from './components/AnalysisLoading'
 import { ParagraphPage } from './components/ParagraphPage'
 import { TrustGauge } from './components/TrustGauge'
 import { usePageAnalysis } from './hooks/usePageAnalysis'
@@ -268,6 +268,7 @@ export function SidePanel({
   const {
     inExtension,
     status,
+    progress,
     result,
     error,
     notice,
@@ -320,7 +321,9 @@ export function SidePanel({
           <span>{notice}</span>
         </div>
       )}
-      {result ? (
+      {loading ? (
+        <AnalysisLoading progress={progress} onCancel={cancel} />
+      ) : result ? (
         <AnalysisReader
           key={result.snapshotId}
           result={result}
@@ -361,30 +364,13 @@ export function SidePanel({
               onClick={() => void analyze()}
               disabled={loading}
             >
-              {loading ? (
-                <LoaderCircle className="spin" size={18} />
-              ) : (
-                <ScanLine size={18} />
-              )}
+              <ScanLine size={18} />
               <span>
-                {loading
-                  ? '페이지를 분석하고 있어요'
-                  : status === 'error'
-                    ? '다시 분석하기'
-                    : '이 페이지 분석하기'}
+                {status === 'error' ? '다시 분석하기' : '이 페이지 분석하기'}
               </span>
-              {!loading && <ArrowRight size={18} />}
+              <ArrowRight size={18} />
             </button>
-            {loading ? (
-              <div className="loading-message" role="status">
-                <p>전체 신뢰도와 문단별 근거를 확인하고 있습니다.</p>
-                <button className="text-button" onClick={cancel}>
-                  취소
-                </button>
-              </div>
-            ) : (
-              <p className="action-caption">전체 신뢰도부터 문단 속 맥락까지</p>
-            )}
+            <p className="action-caption">전체 신뢰도부터 문단 속 맥락까지</p>
             {error && (
               <div className="error-message" role="alert">
                 <TriangleAlert size={16} />

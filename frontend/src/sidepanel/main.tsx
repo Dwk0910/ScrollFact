@@ -1,8 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../index.css'
-import { createApiAnalyzer } from '../api/analyze'
-import type { AnalysisResponse, AnalyzeDocument } from '../types'
+import { createApiAnalyzer, waitForPoll } from '../api/analyze'
+import type {
+  AnalysisProgress,
+  AnalysisResponse,
+  AnalyzeDocument,
+} from '../types'
 import { SidePanel } from './SidePanel'
 
 // 개발용 예상 백엔드 응답은 이 루트 파일 한 곳에서만 관리합니다.
@@ -10,6 +14,7 @@ import { SidePanel } from './SidePanel'
 declare global {
   interface Window {
     SCROLLFACT_MOCK_RESPONSE: AnalysisResponse
+    SCROLLFACT_MOCK_PROGRESS: { delayMs: number; progress: AnalysisProgress }[]
   }
 }
 
@@ -156,22 +161,50 @@ window.SCROLLFACT_MOCK_RESPONSE = {
   ],
 }
 
+// 예상 서버 진행 응답도 루트 한 곳에서 관리합니다. 실제 API 모드에서는 서버 값만 사용합니다.
+window.SCROLLFACT_MOCK_PROGRESS = [
+  { delayMs: 700, progress: { phase: 'compressing' } },
+  { delayMs: 700, progress: { phase: 'uploading' } },
+  { delayMs: 1200, progress: { phase: 'queued' } },
+  { delayMs: 1800, progress: { phase: 'extracting' } },
+  {
+    delayMs: 1800,
+    progress: {
+      phase: 'checking_sources',
+      sources: { completed: 0, total: null, failed: 0 },
+    },
+  },
+  {
+    delayMs: 2500,
+    progress: {
+      phase: 'checking_sources',
+      sources: { completed: 2, total: 5, failed: 0 },
+    },
+  },
+  {
+    delayMs: 1500,
+    progress: {
+      phase: 'checking_sources',
+      sources: { completed: 5, total: 5, failed: 0 },
+    },
+  },
+  {
+    delayMs: 1800,
+    progress: {
+      phase: 'summarizing',
+      sources: { completed: 5, total: 5, failed: 0 },
+    },
+  },
+]
+
 const demo = import.meta.env.VITE_ANALYSIS_MODE !== 'api'
 const analyzeDocument: AnalyzeDocument = demo
-  ? async (snapshot, signal) => {
-      await new Promise<void>((resolve, reject) => {
-        const finish = () => {
-          signal.removeEventListener('abort', abort)
-          resolve()
-        }
-        const timer = window.setTimeout(finish, 850)
-        const abort = () => {
-          window.clearTimeout(timer)
-          reject(new DOMException('Aborted', 'AbortError'))
-        }
-        if (signal.aborted) abort()
-        else signal.addEventListener('abort', abort, { once: true })
-      })
+  ? async (snapshot, signal, onProgress) => {
+      for (const step of window.SCROLLFACT_MOCK_PROGRESS) {
+        signal.throwIfAborted()
+        onProgress?.(structuredClone(step.progress))
+        await waitForPoll(step.delayMs, signal)
+      }
       // 요청 식별자만 맞춥니다. 본문/점수/요약/selector를 프론트에서 생성하지 않습니다.
       const sample = structuredClone(window.SCROLLFACT_MOCK_RESPONSE)
       return {
