@@ -205,6 +205,10 @@ VITE_API_BASE_URL=http://localhost:8080
 - 로그인 UI 제거에 따라 identity 권한을 제거했다. 툴바 아이콘은 기존 방식처럼 페이지 안의 확장 iframe 패널을 연다. 네이티브 sidePanel 진입점은 확장 HTML의 개발·배포 빌드를 위해 유지한다.
 
 
+## 원격 변경 병합
+
+원격의 HTML 저장 기능을 새 헤더의 다운로드 아이콘으로 유지한다. 로컬 HTML 저장은 분석 업로드와 별개이며, 확장 UI/하이라이트를 제거한 복사본과 DOCTYPE을 저장한다. 분석용 gzip에는 여전히 원래 outerHTML을 사용한다. 기존 Google 클라이언트 ID 환경변수 지원도 유지하지만 로그인 UI는 현재 흐름에 없다.
+
 ## 기술 참고
 
 - [Compression Streams API](https://developer.mozilla.org/en-US/docs/Web/API/Compression_Streams_API): 브라우저 내 gzip 처리.

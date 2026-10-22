@@ -57,6 +57,18 @@ function captureDocument(): DocumentSnapshot {
   }
 }
 
+// Local export is independent of analysis: saving must not reset the active watch.
+function serializePageHtml(): string {
+  const clone = document.documentElement.cloneNode(true) as HTMLElement
+  clone.querySelector('#scrollfact-root')?.remove()
+  clone.classList.remove('scrollfact-open')
+  clone.style.removeProperty('--scrollfact-offset')
+  clone.querySelectorAll('.scrollfact-active').forEach((node) => {
+    node.classList.remove('scrollfact-active')
+  })
+  return `<!DOCTYPE html>\n${clone.outerHTML}`
+}
+
 function matchElement(selector: string): HTMLElement | null {
   try {
     const matches = document.querySelectorAll(selector)
@@ -326,6 +338,20 @@ chrome.runtime.onMessage.addListener(
     if (message.type === MessageType.togglePanel) {
       if (document.getElementById('scrollfact-root')) closePanel()
       else void openPanel()
+    }
+    if (message.type === MessageType.getPageHtml) {
+      try {
+        sendResponse({
+          ok: true,
+          payload: {
+            url: location.href,
+            title: document.title,
+            html: serializePageHtml(),
+          },
+        })
+      } catch {
+        sendResponse({ ok: false, error: '페이지 HTML을 가져오지 못했습니다.' })
+      }
     }
     if (message.type === MessageType.captureDocument) {
       try {

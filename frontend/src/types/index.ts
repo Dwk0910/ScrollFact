@@ -1,6 +1,7 @@
 export const MessageType = {
   togglePanel: 'SF_TOGGLE_PANEL',
   getContext: 'SF_GET_CONTEXT',
+  getPageHtml: 'GET_PAGE_HTML',
   captureDocument: 'SF_CAPTURE_DOCUMENT',
   watchSections: 'SF_WATCH_SECTIONS',
   stopWatching: 'SF_STOP_WATCHING',

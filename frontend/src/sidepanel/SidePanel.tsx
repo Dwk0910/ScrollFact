@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Download,
   Link2,
   RefreshCw,
   ScanLine,
@@ -268,6 +269,8 @@ export function SidePanel({
   const {
     inExtension,
     status,
+    savingHtml,
+    savePageHtml,
     progress,
     result,
     error,
@@ -297,6 +300,15 @@ export function SidePanel({
         </a>
         <div className="header-actions">
           {demo && <span className="demo-badge">DEMO</span>}
+          <button
+            className="icon-button"
+            onClick={() => void savePageHtml()}
+            disabled={savingHtml || loading}
+            aria-label={savingHtml ? 'HTML 저장 중' : '현재 페이지 HTML 저장'}
+            title="현재 페이지 HTML 저장"
+          >
+            <Download size={17} />
+          </button>
           {result && (
             <button
               className="icon-button"

@@ -21,6 +21,7 @@ export function usePageAnalysis(
   const resultRef = useRef<AnalysisResponse | null>(null)
   const requestRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
+  const [savingHtml, setSavingHtml] = useState(false)
   const [progress, setProgress] = useState<AnalysisProgress>({
     phase: 'capturing',
   })
@@ -48,6 +49,67 @@ export function usePageAnalysis(
     }
     return tabRef.current
   }, [])
+
+  const savePageHtml = useCallback(async () => {
+    setSavingHtml(true)
+    setError(null)
+    try {
+      let html: string
+      let title: string
+      if (inExtension) {
+        const tabId = await resolveTab()
+        const response: unknown = await chrome.tabs.sendMessage(tabId, {
+          type: MessageType.getPageHtml,
+        })
+        if (
+          !isRecord(response) ||
+          response.ok !== true ||
+          !isRecord(response.payload) ||
+          typeof response.payload.html !== 'string' ||
+          typeof response.payload.title !== 'string'
+        ) {
+          throw new Error(
+            '페이지 HTML을 가져오지 못했습니다. 원문을 새로고침해 주세요.',
+          )
+        }
+        html = response.payload.html
+        title = response.payload.title
+      } else {
+        html = `<!DOCTYPE html>\n${document.documentElement.outerHTML}`
+        title = document.title
+      }
+      const filename =
+        title
+          .trim()
+          .replace(/[\\/:*?"<>|]+/g, ' ')
+          .replace(/\s+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 80) || 'page'
+      const url = URL.createObjectURL(
+        new Blob([html], { type: 'text/html;charset=utf-8' }),
+      )
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${filename}.html`
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setNotice(
+        inExtension
+          ? '현재 페이지 HTML을 저장했습니다.'
+          : '미리보기 페이지 HTML을 저장했습니다.',
+      )
+    } catch (caught) {
+      setNotice(
+        caught instanceof Error
+          ? caught.message
+          : 'HTML을 저장하지 못했습니다.',
+      )
+    } finally {
+      setSavingHtml(false)
+    }
+  }, [inExtension, resolveTab])
 
   const clear = useCallback(() => {
     requestRef.current += 1
@@ -241,6 +303,8 @@ export function usePageAnalysis(
 
   return {
     inExtension,
+    savingHtml,
+    savePageHtml,
     status,
     progress,
     result,
