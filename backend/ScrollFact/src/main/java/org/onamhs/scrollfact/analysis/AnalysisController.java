@@ -25,7 +25,7 @@ public class AnalysisController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(analyses.get(id));
     }
     @GetMapping("/{id}/result")
-    public ResponseEntity<Result> result(@PathVariable String id) {
+    public ResponseEntity<com.fasterxml.jackson.databind.JsonNode> result(@PathVariable String id) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(analyses.result(id));
     }
     @DeleteMapping("/{id}")

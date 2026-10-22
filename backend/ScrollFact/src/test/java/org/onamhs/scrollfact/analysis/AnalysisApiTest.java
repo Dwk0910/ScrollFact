@@ -51,8 +51,11 @@ class AnalysisApiTest {
                 input.sources().stream().filter(SourceDocument::available).map(SourceDocument::url).toList())).toList());
     }
     private JsonNode create(String snapshot, String html) throws Exception {
+        return create(snapshot, html, "analysis");
+    }
+    private JsonNode create(String snapshot, String html, String mode) throws Exception {
         byte[] raw = html.getBytes(StandardCharsets.UTF_8);
-        var metadata = new Metadata(snapshot, "https://article.example/post", "한글 제목", raw.length, "gzip");
+        var metadata = new Metadata(snapshot, "https://article.example/post", "한글 제목", raw.length, "gzip", mode);
         var result = mvc.perform(multipart("/v1/analyses")
             .file(new MockMultipartFile("metadata", "metadata.json", "application/json", mapper.writeValueAsBytes(metadata)))
             .file(new MockMultipartFile("document", "document.html.gz", "application/gzip", gzip(raw)))
@@ -134,6 +137,48 @@ class AnalysisApiTest {
         entity = repository.findById(entity.id).orElseThrow(); entity.finishedAt = System.currentTimeMillis() - 31 * 60_000;
         repository.saveAndFlush(entity); service.expire();
         assertThat(repository.findById(entity.id)).isEmpty();
+    }
+    @Test void diagnosticWithoutAiReportsRealProgressFailuresAndSelectors() throws Exception {
+        when(evaluator.configured()).thenReturn(false);
+        CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
+        when(fetcher.fetch(anyString())).thenAnswer(invocation -> {
+            entered.countDown(); release.await();
+            return new SourceDocument(invocation.getArgument(0), "", "", "", "출처 접근 실패");
+        });
+        String snapshot = UUID.randomUUID().toString();
+        String id = create(snapshot, HTML, "diagnostic").path("analysisId").asText();
+        try {
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+            mvc.perform(get("/v1/analyses/" + id)).andExpect(jsonPath("$.phase").value("checking_sources"))
+                .andExpect(jsonPath("$.sources.total").value(1)).andExpect(jsonPath("$.sources.completed").value(0));
+            mvc.perform(get("/v1/analyses/" + id + "/result")).andExpect(status().isConflict());
+        } finally { release.countDown(); }
+        JsonNode completed = waitFor(id, "completed");
+        assertThat(completed.path("sources").path("completed").asInt()).isEqualTo(1);
+        assertThat(completed.path("sources").path("failed").asInt()).isEqualTo(1);
+        mvc.perform(get("/v1/analyses/" + id + "/result")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.kind").value("diagnostic"))
+            .andExpect(jsonPath("$.passages.length()").value(2))
+            .andExpect(jsonPath("$.passages[0].selector").value("html > body > article > p:nth-of-type(1)"))
+            .andExpect(jsonPath("$.sources[0].failure").value("출처 접근 실패"))
+            .andExpect(jsonPath("$.overview").doesNotExist()).andExpect(jsonPath("$.score").doesNotExist());
+        verify(evaluator, never()).evaluate(any());
+        verify(fetcher, times(1)).fetch(anyString());
+        assertThat(create(snapshot, HTML, "diagnostic").path("analysisId").asText()).isEqualTo(id);
+        byte[] raw = HTML.getBytes(StandardCharsets.UTF_8);
+        mvc.perform(multipart("/v1/analyses")
+            .file(new MockMultipartFile("metadata", "m.json", "application/json", mapper.writeValueAsBytes(new Metadata(snapshot, "https://article.example/post", "한글 제목", raw.length, "gzip"))))
+            .file(new MockMultipartFile("document", "d.gz", "application/gzip", gzip(raw))).header("Idempotency-Key", snapshot))
+            .andExpect(status().isConflict());
+        mvc.perform(delete("/v1/analyses/" + id)).andExpect(status().isNoContent());
+        mvc.perform(get("/v1/analyses/" + id)).andExpect(status().isNotFound());
+    }
+    @Test void rejectsUnknownProcessingMode() throws Exception {
+        String snapshot = UUID.randomUUID().toString(); byte[] raw = HTML.getBytes(StandardCharsets.UTF_8);
+        mvc.perform(multipart("/v1/analyses")
+            .file(new MockMultipartFile("metadata", "m.json", "application/json", mapper.writeValueAsBytes(new Metadata(snapshot, "https://article.example/post", "제목", raw.length, "gzip", "fake"))))
+            .file(new MockMultipartFile("document", "d.gz", "application/gzip", gzip(raw))).header("Idempotency-Key", snapshot))
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("invalid_mode"));
     }
     @Test void malformedMultipartUsesProblemDetails() throws Exception {
         mvc.perform(multipart("/v1/analyses").header("Idempotency-Key", UUID.randomUUID().toString()))

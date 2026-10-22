@@ -29,6 +29,8 @@ public class UploadReader {
         } catch (IllegalArgumentException | NullPointerException e) {
             throw new ApiFailure(400, "invalid_metadata", "유효한 UUID와 http(s) 페이지 URL이 필요합니다.");
         }
+        if (!("analysis".equals(meta.mode()) || "diagnostic".equals(meta.mode())))
+            throw new ApiFailure(400, "invalid_mode", "mode는 analysis 또는 diagnostic이어야 합니다.");
         if (!"gzip".equals(meta.encoding()) || meta.title() == null || meta.title().length() > 2000 || meta.url().length() > 8192)
             throw new ApiFailure(400, "invalid_metadata", "페이지 메타데이터 형식이 올바르지 않습니다.");
         if (meta.htmlBytes() < 1 || meta.htmlBytes() > MAX_HTML || file.getSize() > MAX_UPLOAD)
@@ -43,6 +45,7 @@ public class UploadReader {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             digest.update(bytes);
             digest.update(("\0" + meta.url() + "\0" + meta.title()).getBytes(StandardCharsets.UTF_8));
+            if ("diagnostic".equals(meta.mode())) digest.update("\0diagnostic".getBytes(StandardCharsets.UTF_8));
             return new Input(meta, html, HexFormat.of().formatHex(digest.digest()));
         } catch (ApiFailure e) { throw e; }
         catch (IOException e) { throw new ApiFailure(400, "invalid_gzip", "올바른 gzip UTF-8 HTML 파일이 필요합니다."); }

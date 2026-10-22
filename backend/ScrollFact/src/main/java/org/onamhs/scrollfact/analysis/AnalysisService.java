@@ -34,7 +34,7 @@ public class AnalysisService {
             if (!existing.get().digest.equals(input.digest())) throw new ApiFailure(409, "idempotency_conflict", "같은 snapshotId에 다른 페이지 내용이 전달되었습니다.");
             return view(existing.get());
         }
-        if (!evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
+        if (!"diagnostic".equals(meta.mode()) && !evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
         if (repository.count() >= 1000) throw new ApiFailure(429, "capacity_exceeded", "보관 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.");
         var entity = new AnalysisEntity();
         entity.id = UUID.randomUUID().toString(); entity.snapshotId = meta.snapshotId(); entity.digest = input.digest();
@@ -51,10 +51,10 @@ public class AnalysisService {
         return view(entity);
     }
     public synchronized JobView get(String id) { return view(find(id)); }
-    public synchronized Result result(String id) {
+    public synchronized com.fasterxml.jackson.databind.JsonNode result(String id) {
         var entity = find(id);
         if (!"completed".equals(entity.status)) throw new ApiFailure(409, "result_not_ready", "완료된 분석 결과가 아직 없습니다.");
-        try { return mapper.readValue(entity.resultJson, Result.class); }
+        try { return mapper.readTree(entity.resultJson); }
         catch (Exception e) { throw new ApiFailure(500, "invalid_stored_result", "저장된 결과를 읽지 못했습니다."); }
     }
     public synchronized void delete(String id) {
@@ -75,7 +75,7 @@ public class AnalysisService {
         entity.totalSources = total; entity.completedSources = completed; entity.failedSources = failed;
         repository.saveAndFlush(entity);
     }
-    private synchronized void complete(String id, Result result) throws Exception {
+    private synchronized void complete(String id, Object result) throws Exception {
         var entity = find(id);
         if (Thread.currentThread().isInterrupted() || terminal(entity)) throw new CancellationException();
         entity.resultJson = mapper.writeValueAsString(result); entity.status = "completed"; entity.phase = null;
@@ -106,6 +106,13 @@ public class AnalysisService {
             }
             documents.sort(Comparator.comparing(SourceDocument::url));
             var meta = input.metadata();
+            if ("diagnostic".equals(meta.mode())) {
+                complete(id, new DiagnosticResult("1.0", "diagnostic", id, meta.snapshotId(),
+                    new DocumentInfo(meta.url(), meta.title()), meta.htmlBytes(), page.passages(),
+                    documents.stream().map(d -> new DiagnosticSource(d.url(), d.title(),
+                        d.text() == null ? 0 : d.text().length(), d.failure())).toList()));
+                return;
+            }
             progress(id, "summarizing", pending.size(), pending.size(), failed);
             Evaluation evaluation = evaluator.evaluate(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
             complete(id, assembler.assemble(id, meta, page, documents, evaluation));

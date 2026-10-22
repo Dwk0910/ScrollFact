@@ -4,7 +4,12 @@ import java.util.List;
 
 public final class AnalysisModels {
     private AnalysisModels() {}
-    public record Metadata(String snapshotId, String url, String title, long htmlBytes, String encoding) {}
+    public record Metadata(String snapshotId, String url, String title, long htmlBytes, String encoding, String mode) {
+        public Metadata { if (mode == null) mode = "analysis"; }
+        public Metadata(String snapshotId, String url, String title, long htmlBytes, String encoding) {
+            this(snapshotId, url, title, htmlBytes, encoding, "analysis");
+        }
+    }
     public record SourceProgress(int completed, Integer total, int failed) {}
     public record JobView(String analysisId, String snapshotId, String status, String phase,
                           SourceProgress sources, String error) {}
@@ -16,6 +21,10 @@ public final class AnalysisModels {
                           String status, String summary, List<Reason> reasons, List<SourceLink> sources) {}
     public record Result(String schemaVersion, String analysisId, String snapshotId, DocumentInfo document,
                          Assessment overview, List<Section> sections) {}
+    public record DiagnosticSource(String url, String title, int textCharacters, String failure) {}
+    public record DiagnosticResult(String schemaVersion, String kind, String analysisId, String snapshotId,
+                                   DocumentInfo document, long htmlBytes, List<Passage> passages,
+                                   List<DiagnosticSource> sources) {}
     public record Passage(String id, String selector, String text) {}
     public record ParsedPage(List<Passage> passages, List<String> sourceUrls) {}
     public record SourceDocument(String url, String title, String publisher, String text, String failure) {
