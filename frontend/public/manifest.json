@@ -24,8 +24,7 @@
   "permissions": [
     "tabs",
     "activeTab",
-    "storage",
-    "sidePanel"
+    "storage"
   ],
   "host_permissions": [
     "http://*/*",
@@ -56,8 +55,5 @@
       ],
       "run_at": "document_idle"
     }
-  ],
-  "side_panel": {
-    "default_path": "src/sidepanel/index.html"
-  }
+  ]
 }

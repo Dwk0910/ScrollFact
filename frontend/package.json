@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:extension": "node scripts/check-extension-build.mjs",
     "lint": "eslint .",
     "test:api": "node --test tests/api.test.mjs",
     "test:live": "node tests/live-api.mjs",

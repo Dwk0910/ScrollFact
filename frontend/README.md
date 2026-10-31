@@ -1,6 +1,6 @@
 # ScrollFact
 
-웹 페이지 전체의 신뢰도와 문단별 판단 근거를 보여 주는 Chrome 확장 프로그램. React + TypeScript + Vite로 만든 분석 패널입니다.
+웹 페이지 전체의 신뢰도와 문단별 판단 근거를 보여 주는 Chrome/웨일 확장 프로그램. React + TypeScript + Vite로 만든 분석 패널입니다.
 
 ## 개발
 
@@ -15,7 +15,11 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 ## 원문 스크롤 연동
 
-Chrome의 `chrome://extensions`에서 개발자 모드를 켜고 `dist`를 압축 해제된 확장으로 로드합니다. 개발 서버의 `/demo.html`을 열어 ScrollFact 아이콘 → 분석 → 원문 스크롤로 확인합니다. 샘플의 CSS 선택자는 이 데모 기사의 4개 문단에 대응합니다.
+먼저 `npm run build`와 `npm run check:extension`을 실행합니다. Chrome의 `chrome://extensions` 또는 웨일의 `whale://extensions`에서 개발자 모드를 켜고 **`frontend/dist`**를 압축 해제된 확장으로 로드합니다. 이미 설치했다면 확장의 새로고침 버튼을 누릅니다. 이 빌드는 Vite 개발 서버 없이 실행됩니다.
+
+일반 HTTP(S) 페이지에서 툴바의 확장앱 메뉴 → ScrollFact를 누르면 페이지 안에 패널이 열립니다. 브라우저의 새 탭·설정·확장앱 관리 페이지에서는 콘텐츠 스크립트가 실행되지 않습니다. 현재 패널은 페이지에 삽입한 iframe이므로 Chrome 전용 `sidePanel` 권한과 `side_panel` 등록은 사용하지 않습니다.
+
+원문 스크롤 연동은 개발 서버의 `/demo.html`에서 ScrollFact 아이콘 → 분석 → 원문 스크롤로 확인합니다. 샘플의 CSS 선택자는 이 데모 기사의 4개 문단에 대응합니다.
 
 변경이 적용되지 않으면 확장을 새로고침한 후 원문 페이지도 새로고침합니다. UI의 `원문 따라가기`로 자동 이동을 끌 수 있습니다. 접기는 상태를 유지하고, 닫았다 열면 새로 분석합니다.
 
@@ -32,7 +36,7 @@ VITE_ANALYSIS_MODE=api
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-설정 후 개발 서버를 재시작합니다. 자세한 계약과 이전 버전과의 기능 차이는 [API 명세](docs/backend-api.md)에 있습니다. 백엔드 실행과 AI 제공자 연결은 [백엔드 안내](../backend/ScrollFact/README.md)를 참고하세요. AI 미설정 상태에서는 실제 분석 요청에 503을 반환합니다. 상태와 결과 조회는 별도 REST 리소스입니다.
+설정 후 개발 서버를 재시작합니다. 설치용 확장에서는 `npm run build` 후 확장과 원문 페이지를 새로고침해야 환경변수가 반영됩니다. 기본 mock 모드의 UI는 백엔드 없이 동작하지만, api 모드의 실제 분석에는 백엔드와 AI 제공자가 필요합니다. 자세한 계약과 이전 버전과의 기능 차이는 [API 명세](docs/backend-api.md)에 있습니다. 백엔드 실행과 AI 제공자 연결은 [백엔드 안내](../backend/ScrollFact/README.md)를 참고하세요. AI 미설정 상태에서는 실제 분석 요청에 503을 반환합니다. 상태와 결과 조회는 별도 REST 리소스입니다.
 
 ## 검증 및 배포 빌드
 
@@ -40,6 +44,14 @@ VITE_API_BASE_URL=http://localhost:8080
 npm run lint
 node --test tests/api.test.mjs
 npm run build
+npm run check:extension
 ```
 
-빌드된 `dist`를 Chrome에 로드할 수 있습니다. 개발 서버와 프로덕션 빌드는 같은 `dist`를 사용하므로, 확장 개발을 계속할 때는 빌드 후 개발 서버를 재시작합니다.
+출력 폴더는 다음과 같이 분리됩니다.
+
+- `npm run build` → `dist`: Chrome/웨일에 설치할 독립 실행 빌드.
+- `npm run dev` → `dist-dev`: HMR 개발용 확장. 해당 Vite 서버를 계속 켜 두어야 합니다.
+
+개발 서버를 켜도 기존 `dist`를 덮어쓰지 않습니다. `check:extension`은 설치용 빌드에 개발 로더가 섞였는지, manifest와 패널이 참조하는 파일이 존재하는지 검사합니다. 다른 출력 경로는 `npm run check:extension -- /path/to/build`로 확인합니다.
+
+`Service worker registration failed`, `unsupported MIME type ('text/html')`, `CRXJS DEV MODE`가 보이면 개발 출력물을 설치했거나 개발 로더가 잘못된 서버에 연결한 것인지 확인합니다. 특히 다른 프로젝트가 5173 포트를 사용 중이면 그 서버에서 HTML을 받아 확장이 실행되지 않을 수 있습니다. 이때 설치용 `dist`를 다시 빌드하고 확장을 새로고침합니다. 개발 서버가 필요하면 `npm run dev -- --port 5174`처럼 빈 포트를 사용합니다. [CRXJS 배포 빌드 안내](https://crxjs.dev/guide/packaging/) 참고.

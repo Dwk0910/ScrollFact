@@ -14,7 +14,7 @@ function stripCrossorigin(): Plugin {
   }
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react(), tailwindcss(), crx({ manifest }), stripCrossorigin()],
   server: {
     host: '127.0.0.1',
@@ -23,8 +23,14 @@ export default defineConfig({
     hmr: { host: '127.0.0.1' },
   },
   build: {
+    // HMR writes extension loaders too. Never let them overwrite an installed build.
+    outDir: command === 'serve' ? 'dist-dev' : 'dist',
     rolldownOptions: {
-      input: { preview: 'index.html', integration: 'integration.html' },
+      input: {
+        preview: 'index.html',
+        integration: 'integration.html',
+        panel: 'src/sidepanel/index.html',
+      },
     },
   },
-})
+}))
