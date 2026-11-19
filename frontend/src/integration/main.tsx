@@ -13,6 +13,10 @@ body{margin:0;background:#f8faf8;color:#223431;font-family:system-ui,sans-serif}
 <section><h2>03 · 실패도 진행 상태에 포함</h2><p id="blocked">이 <a href="http://127.0.0.1/blocked-source">내부 주소</a>는 서버의 외부 출처 수집 정책에 따라 차단되어야 합니다. 일부 출처가 실패해도 나머지 문단과 출처의 처리 결과를 확인할 수 있습니다.</p></section>
 <section><h2>04 · 원문 위치 연결</h2><p id="selectors">서버가 돌려준 CSS 선택자로 이 문단을 찾아 이동합니다. AI를 연결하기 전까지 요약, 판단 근거, 신뢰도 점수는 생성하지 않습니다.</p></section>
 </article></body></html>`
-const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+// Dedicated local coaching server; the normal preview retains its configured endpoint.
+const coaching = ['127.0.0.1', 'localhost'].includes(location.hostname)
+  && new URLSearchParams(location.search).get('coaching') === '1'
+const baseUrl = coaching ? 'http://127.0.0.1:8081'
+  : import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
 
 createRoot(document.getElementById('root')!).render(<StrictMode><IntegrationPreview documentHtml={diagnosticDocument} baseUrl={baseUrl} /></StrictMode>)

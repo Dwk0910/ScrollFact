@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArrowDown,
   ArrowRight,
@@ -25,6 +19,7 @@ import { AnalysisLoading } from './components/AnalysisLoading'
 import { ParagraphPage } from './components/ParagraphPage'
 import { TrustGauge } from './components/TrustGauge'
 import { usePageAnalysis } from './hooks/usePageAnalysis'
+import { useReaderNavigation } from './hooks/useReaderNavigation'
 import { trustLabels, trustTone } from './trust'
 
 interface ReaderProps {
@@ -40,25 +35,12 @@ function AnalysisReader({
   sourceSection,
   jumpToSource,
 }: ReaderProps) {
-  const readerRef = useRef<HTMLDivElement>(null)
-  const pagesRef = useRef<(HTMLElement | null)[]>([])
-  const [page, setPage] = useState(0)
   const [followSource, setFollowSource] = useState(true)
   const tone = trustTone(result.overview.status)
   const VerdictIcon = tone === 'green' ? ShieldCheck : TriangleAlert
   const count = result.sections.length
 
-  const goTo = useCallback((index: number) => {
-    const reader = readerRef.current
-    const target = pagesRef.current[index]
-    if (!reader || !target) return
-    reader.scrollTo({
-      top: target.offsetTop,
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'instant'
-        : 'smooth',
-    })
-  }, [])
+  const { readerRef, pagesRef, page, goTo, onScroll, onKeyDown } = useReaderNavigation(count)
 
   useEffect(() => {
     if (!followSource || sourceSection === null) return
@@ -68,29 +50,6 @@ function AnalysisReader({
     if (index >= 0) goTo(index + 1)
   }, [followSource, goTo, result.sections, sourceSection])
 
-  function onScroll() {
-    const reader = readerRef.current
-    if (!reader) return
-    const line = reader.scrollTop + reader.clientHeight * 0.4
-    let nextPage = 0
-    pagesRef.current.forEach((element, index) => {
-      if (element && element.offsetTop <= line) nextPage = index
-    })
-    setPage(nextPage)
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.target !== event.currentTarget) return
-    const targets: Record<string, number> = {
-      PageDown: Math.min(count, page + 1),
-      PageUp: Math.max(0, page - 1),
-      Home: 0,
-      End: count,
-    }
-    if (!(event.key in targets)) return
-    event.preventDefault()
-    goTo(targets[event.key])
-  }
 
   return (
     <>

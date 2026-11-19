@@ -197,7 +197,11 @@ window.SCROLLFACT_MOCK_PROGRESS = [
   },
 ]
 
-const demo = import.meta.env.VITE_ANALYSIS_MODE !== 'api'
+// The coaching archive can preview the original UI independently of the local API setting.
+// Extension pages retain their configured analysis mode.
+const coachingPreview = !(typeof chrome !== 'undefined' && chrome.runtime?.id)
+  && new URLSearchParams(location.search).get('preview') === 'mock'
+const demo = coachingPreview || import.meta.env.VITE_ANALYSIS_MODE !== 'api'
 const analyzeDocument: AnalyzeDocument = demo
   ? async (snapshot, signal, onProgress) => {
       for (const step of window.SCROLLFACT_MOCK_PROGRESS) {

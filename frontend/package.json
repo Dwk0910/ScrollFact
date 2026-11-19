@@ -8,9 +8,11 @@
     "build": "tsc -b && vite build",
     "check:extension": "node scripts/check-extension-build.mjs",
     "lint": "eslint .",
+    "test:feed": "node --test tests/feed-context.test.mjs",
     "test:api": "node --test tests/api.test.mjs",
     "test:live": "node tests/live-api.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:deductions": "tsc -b && vite build --mode deductions && node scripts/check-extension-build.mjs dist-deductions"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
