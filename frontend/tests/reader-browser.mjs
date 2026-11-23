@@ -56,6 +56,13 @@ for (let attempt=0;attempt<2;attempt++) {
   assert.equal(await page.locator('#short-11.scrollfact-active').count(),1);
   assert.equal(await page.locator('.scrollfact-active').count(),1);
 }
+// Framework rerenders must preserve a selected paragraph with unchanged text.
+await page.locator('#short-11').evaluate(el => {
+  const replacement = el.cloneNode(true);
+  replacement.classList.remove('scrollfact-active');
+  el.replaceWith(replacement);
+});
+await page.waitForFunction(() => document.querySelector('#short-11').classList.contains('scrollfact-active'));
 await page.mouse.move(200,400);
 await page.mouse.wheel(0,-100);
 await page.waitForFunction(() => !document.querySelector('#short-11').classList.contains('scrollfact-active') && document.querySelectorAll('.scrollfact-active').length===1);

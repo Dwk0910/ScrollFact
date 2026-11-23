@@ -151,7 +151,15 @@ export function mountContentController(host: ContentHost) {
       frame = 0
       checkLocation()
       if (!snapshot) return
-      if (selectedId && targets.get(selectedId)?.isConnected) return
+      if (selectedId) {
+        const selected = targets.get(selectedId)
+        if (selected?.isConnected) {
+          // A site can replace the DOM node without changing its text. Restore
+          // the explicit selection on the new node instead of returning early.
+          if (activeId !== selectedId || !selected.classList.contains('scrollfact-active')) activate(selectedId)
+          return
+        }
+      }
       const middle = window.innerHeight * 0.45
       let bestId: string | null = null
       let bestDistance = Infinity
