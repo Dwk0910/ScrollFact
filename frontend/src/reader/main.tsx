@@ -6,6 +6,7 @@ import { useUpload } from './useUpload'
 import { isRecord, type AnalysisProgress } from '../types'
 import type { ReaderCheck } from '../api/analyze'
 import './style.css'
+import SettingsPanel from './SettingsPanel'
 
 const phases: Record<AnalysisProgress['phase'], string> = {
   capturing: '읽던 페이지를 가져오고 있어요', compressing: '페이지를 준비하고 있어요', uploading: '분석할 내용을 전달하고 있어요',
@@ -56,8 +57,8 @@ export default function Reader() {
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('서버 주소를 확인해 주세요')
       const response = await fetch(`${url.href.replace(/\/$/, '')}/v1/reader/status`, { signal: AbortSignal.any([task.signal, AbortSignal.timeout(10000)]), cache: 'no-store' })
       const status: unknown = await response.json()
-      if (!response.ok || !isRecord(status) || typeof status.configured !== 'boolean' || typeof status.model !== 'string') throw new Error('연결 상태를 확인하지 못했어요')
-      if (!task.signal.aborted) setConnection(status.configured ? `서버 설정 확인 · ${status.model} (실제 API 인증은 분석 시 확인)` : 'API 키 또는 모델이 설정되지 않았어요')
+      if (!response.ok || !isRecord(status) || typeof status.configured !== 'boolean' || typeof status.model !== 'string' || typeof status.provider !== 'string') throw new Error('연결 상태를 확인하지 못했어요')
+      if (!task.signal.aborted) setConnection(status.configured ? `서버 설정 확인 · ${status.provider} · ${status.model} (실제 API 인증은 분석 시 확인)` : 'API 키 또는 모델이 설정되지 않았어요')
     } catch (error) { if (!task.signal.aborted) setConnection(error instanceof Error ? error.message : '서버에 연결하지 못했어요') }
     finally { if (connectionTask.current === task) setChecking(false) }
   }
@@ -83,14 +84,11 @@ export default function Reader() {
         {block && <div className="checks">{block.checks.map((c, i) => <details key={i} className={`check check-${c.status}`}><summary><span className="check-label">{labels[c.status]}</span><span>{c.quote}</span></summary><p>{c.reason}</p>{c.evidence.map((e, j) => <a key={j} href={e.url} target="_blank" rel="noopener noreferrer"><span>{new URL(e.url).hostname} <ExternalLink size={11} /></span><q>{e.quote}</q></a>)}</details>)}</div>}
         </> : <p className="empty-copy">분석할 본문을 찾지 못했어요. 원문 추출 범위를 확인해야 해요.</p>}
       </section>
-      <details className="receipt"><summary>분석 정보</summary>{analysis ? <><p>OpenAI · {analysis.model}</p><p>부가정보로 분류된 블록 {analysis.excludedBlocks}개</p><p>입력 {analysis.inputTokens.toLocaleString()} · 출력 {analysis.outputTokens.toLocaleString()} 토큰</p><p>AI 판단은 오류가 있을 수 있어요. 연결된 원문과 근거를 함께 확인해 주세요.</p></> : <p>연결 점검 결과입니다. AI 분석은 실행하지 않았어요.</p>}</details>
+      <details className="receipt"><summary>분석 정보</summary>{analysis ? <><p>AI 모델 · {analysis.model}</p><p>부가정보로 분류된 블록 {analysis.excludedBlocks}개</p><p>입력 {analysis.inputTokens.toLocaleString()} · 출력 {analysis.outputTokens.toLocaleString()} 토큰</p><p>AI 판단은 오류가 있을 수 있어요. 연결된 원문과 근거를 함께 확인해 주세요.</p></> : <p>연결 점검 결과입니다. AI 분석은 실행하지 않았어요.</p>}</details>
     </main>}
-    <dialog ref={dialog} onCancel={() => setView(null)} onClose={() => setView(null)} className="sheet"><div className="sheet-header"><h2>{view === 'about' ? 'ScrollFact란?' : '설정'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setView(null)}><X size={18} /></button></div>
-      {view === 'about' ? <div className="about-content"><span className="eyebrow">READ WITH CONTEXT</span><h2>같은 글,<br />다른 생각.<br /><span>이유를 읽는 시간.</span></h2><p className="about-lead">답글을 쓰기 전에,<br />상대가 왜 그렇게 말했는지.</p><div className="about-feature"><span>01</span><h3>글의 맥락을 읽어요</h3><p>문단의 주장과 앞뒤 흐름을 살피고, 자료와 대조할 부분을 원문에 연결해 확인해요.</p></div><div className="about-feature"><span>02</span><h3>관점과 이유를 함께 봐요</h3><p>찬반이라는 한마디보다, 글에 드러난 각자의 이유를 먼저 읽어요. 의견의 차이를 사실의 오류와 구분해요.</p></div><p className="about-note">ScrollFact는 판단을 대신하지 않아요.<br />원문과 근거를 읽고 스스로 판단하도록 돕습니다.</p></div> : <div className="settings-content">
-        <section><h3>AI 연결</h3><div className="setting-row"><div><strong>OpenAI API</strong><p>서버의 API 키로 연결</p></div><button onClick={() => void checkConnection()} disabled={checking}>{checking ? '확인 중' : '연결 확인'}</button></div><p className="connection-status" role="status">{connection}</p><p className="caption">API 키는 서버의 OPENAI_API_KEY, 모델은 SCROLLFACT_OPENAI_MODEL로 설정해 주세요. 브라우저에는 키를 저장하지 않아요.</p></section>
-        <section><h3>읽기 동작</h3><label className="setting-row"><div><strong>원문 스크롤 따라가기</strong><p>읽고 있는 문단으로 분석을 전환해요</p></div><input className="switch" type="checkbox" checked={preferences.follow} onChange={e => change({ follow: e.target.checked })} /></label></section>
-        <section><h3>고급 설정</h3><label htmlFor="server">서버 주소</label><input id="server" type="url" value={preferences.server} disabled={busy} onChange={e => change({ server: e.target.value })} /><label htmlFor="mode">실행 모드</label><select id="mode" disabled={busy} value={preferences.mode} onChange={e => change({ mode: e.target.value === 'diagnostic' ? 'diagnostic' : 'reader' })}><option value="reader">AI 분석</option><option value="diagnostic">페이지 전송 점검 (AI 사용 안 함)</option></select><p className="caption">분석 버튼을 누르면 현재 페이지를 서버로 보내요. AI 분석 모드에서는 추출한 텍스트와 근거 자료를 OpenAI로 전달해요.</p></section><p className="caption" role="status">{saveNotice}</p>
-      </div>}
+    <dialog ref={dialog} onCancel={() => setView(null)} onClose={() => setView(null)} className="sheet" aria-label={view === 'settings' ? '설정' : 'ScrollFact란?'}>{view === 'about' && <div className="sheet-header"><h2>{view === 'about' ? 'ScrollFact란?' : '설정'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setView(null)}><X size={18} /></button></div>}
+      {view === 'about' ? <div className="about-content"><span className="eyebrow">READ WITH CONTEXT</span><h2>같은 글,<br />다른 생각.<br /><span>이유를 읽는 시간.</span></h2><p className="about-lead">답글을 쓰기 전에,<br />상대가 왜 그렇게 말했는지.</p><div className="about-feature"><span>01</span><h3>글의 맥락을 읽어요</h3><p>문단의 주장과 앞뒤 흐름을 살피고, 자료와 대조할 부분을 원문에 연결해 확인해요.</p></div><div className="about-feature"><span>02</span><h3>관점과 이유를 함께 봐요</h3><p>찬반이라는 한마디보다, 글에 드러난 각자의 이유를 먼저 읽어요. 의견의 차이를 사실의 오류와 구분해요.</p></div><p className="about-note">ScrollFact는 판단을 대신하지 않아요.<br />원문과 근거를 읽고 스스로 판단하도록 돕습니다.</p></div> : view === 'settings' ? <SettingsPanel preferences={preferences} change={change} busy={busy} checking={checking} connection={connection} saveNotice={saveNotice} checkConnection={checkConnection} close={() => setView(null)} /> : null}
+
     </dialog>
   </div>
 }

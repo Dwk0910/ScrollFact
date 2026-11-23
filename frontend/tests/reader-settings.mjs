@@ -1,0 +1,33 @@
+// Serve frontend/dist locally before running. Status API is stubbed; no paid AI requests.
+const { chromium } = await import(process.env.SCROLLFACT_PLAYWRIGHT_MODULE || 'playwright');
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+const dir=process.env.SCROLLFACT_UI_DIR || '/tmp/scrollfact-settings-review';
+await fs.mkdir(dir,{recursive:true});
+const browser=await chromium.launch({executablePath:process.env.SCROLLFACT_BROWSER_PATH || undefined,headless:true});
+try {
+ const page=await browser.newPage({viewport:{width:420,height:780},deviceScaleFactor:2});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.route('**/v1/reader/status',r=>r.fulfill({json:{provider:'Google Gemini',configured:false,model:'',authentication:'server_api_key'}}));
+ await page.goto((process.env.SCROLLFACT_PREVIEW_URL || 'http://127.0.0.1:4174')+'/reader.html');
+ await page.getByRole('button',{name:'설정',exact:true}).click();
+ await page.screenshot({path:dir+'/01-settings.png'});
+ await page.getByRole('button',{name:/읽기 동작/}).click();
+ await page.getByRole('switch').uncheck();
+ await page.getByRole('button',{name:'설정으로 돌아가기'}).click();
+ await page.getByRole('button',{name:/고급 설정/}).click();
+ await page.getByRole('radio',{name:'페이지 전송 점검',exact:true}).check();
+ await page.locator('#server').fill('invalid');await page.getByRole('button',{name:'적용',exact:true}).click();
+ await page.getByRole('alert').waitFor();
+ await page.locator('#server').fill('http://127.0.0.1:8082');await page.getByRole('button',{name:'적용',exact:true}).click();
+ await page.screenshot({path:dir+'/02-advanced.png'});
+ await page.getByRole('button',{name:'설정으로 돌아가기'}).click();
+ await page.getByRole('button',{name:/AI 연결/}).click();await page.getByRole('button',{name:'연결 확인',exact:true}).click();
+ await page.getByText('API 키 또는 모델이 설정되지 않았어요',{exact:true}).waitFor();
+ await page.screenshot({path:dir+'/03-ai.png'});
+ await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(e=>e.open),false);
+ await page.reload();await page.getByRole('button',{name:'설정',exact:true}).click();await page.getByRole('button',{name:/읽기 동작/}).click();assert.equal(await page.getByRole('switch').isChecked(),false);
+ await page.getByRole('button',{name:'설정으로 돌아가기'}).click();await page.getByRole('button',{name:/고급 설정/}).click();assert.equal(await page.getByRole('radio',{name:'페이지 전송 점검',exact:true}).isChecked(),true);assert.equal(await page.locator('#server').inputValue(),'http://127.0.0.1:8082');
+ await page.setViewportSize({width:320,height:640});assert.equal(await page.locator('.settings-page').evaluate(e=>e.scrollWidth<=e.clientWidth),true);
+ assert.deepEqual(errors,[]); console.log('PASS: settings navigation, persistence, URL validation, Escape, 320px layout; screenshots '+dir);
+} finally {await browser.close()}

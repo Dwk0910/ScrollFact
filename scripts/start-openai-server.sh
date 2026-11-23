@@ -14,4 +14,5 @@ if [[ -z "$OPENAI_API_KEY" || -z "$SCROLLFACT_OPENAI_MODEL" ]]; then
 fi
 export OPENAI_API_KEY SCROLLFACT_OPENAI_MODEL
 # No keys are written to disk. Gradle inherits this process environment.
+export SCROLLFACT_AI_PROVIDER=openai
 exec ./gradlew :backend:bootRun

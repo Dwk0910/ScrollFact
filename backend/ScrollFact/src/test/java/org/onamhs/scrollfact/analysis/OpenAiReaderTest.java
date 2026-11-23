@@ -52,22 +52,22 @@ class OpenAiReaderTest {
         } finally { server.stop(0); }
     }
     @Test void rejectsMissingIdsUnknownIdsInventedQuotesAndUnsupportedVerdicts() {
-        assertThatCode(() -> OpenAiReader.validate(valid(), input)).doesNotThrowAnyException();
-        assertThatThrownBy(() -> OpenAiReader.validate(new Output(List.of(), List.of()), input)).isInstanceOf(ApiFailure.class);
+        assertThatCode(() -> ReaderContract.validate(valid(), input)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> ReaderContract.validate(new Output(List.of(), List.of()), input)).isInstanceOf(ApiFailure.class);
         for (String id : List.of("p1", "invented")) {
             var output = new Output(List.of(new Block(id, "body", "제목", "해설", List.of(new Check("없는 구절", "opinion", "이유", List.of())))), List.of());
-            assertThatThrownBy(() -> OpenAiReader.validate(output, input)).isInstanceOf(ApiFailure.class);
+            assertThatThrownBy(() -> ReaderContract.validate(output, input)).isInstanceOf(ApiFailure.class);
         }
         var unsupported = new Output(List.of(new Block("p1", "body", "제목", "해설", List.of(new Check("발표 기회", "supported", "이유", List.of())))), List.of());
-        assertThatThrownBy(() -> OpenAiReader.validate(unsupported, input)).isInstanceOf(ApiFailure.class);
+        assertThatThrownBy(() -> ReaderContract.validate(unsupported, input)).isInstanceOf(ApiFailure.class);
         var fabricated = new Output(List.of(new Block("p1", "body", "제목", "해설", List.of(new Check("발표 기회", "supported", "이유", List.of(new Evidence("https://example.org/source", "없는 인용")))))), List.of());
-        assertThatThrownBy(() -> OpenAiReader.validate(fabricated, input)).isInstanceOf(ApiFailure.class);
+        assertThatThrownBy(() -> ReaderContract.validate(fabricated, input)).isInstanceOf(ApiFailure.class);
     }
     @Test void rejectsDuplicateOpinionsAndKeepsAuxiliaryOutOfPerspectives() {
         var v = valid();
-        assertThatThrownBy(() -> OpenAiReader.validate(new Output(v.blocks(), List.of(v.perspectives().get(0), v.perspectives().get(0))), input)).isInstanceOf(ApiFailure.class);
-        assertThatThrownBy(() -> OpenAiReader.validate(new Output(List.of(new Block("p1", "auxiliary", "", "", List.of())), v.perspectives()), input)).isInstanceOf(ApiFailure.class);
-        assertThatCode(() -> OpenAiReader.validate(new Output(List.of(new Block("p1", "auxiliary", "", "", List.of())), List.of()), input)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> ReaderContract.validate(new Output(v.blocks(), List.of(v.perspectives().get(0), v.perspectives().get(0))), input)).isInstanceOf(ApiFailure.class);
+        assertThatThrownBy(() -> ReaderContract.validate(new Output(List.of(new Block("p1", "auxiliary", "", "", List.of())), v.perspectives()), input)).isInstanceOf(ApiFailure.class);
+        assertThatCode(() -> ReaderContract.validate(new Output(List.of(new Block("p1", "auxiliary", "", "", List.of())), List.of()), input)).doesNotThrowAnyException();
     }
     @Test void noKeyMeansNoCallAndNoFabricatedResult() {
         var reader = new OpenAiReader("", "", mapper);

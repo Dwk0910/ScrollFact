@@ -25,8 +25,9 @@ await page.evaluate(async bundle=>{
 },bundle);
 const panel=page.frameLocator('iframe');
 await panel.getByRole('button',{name:'설정',exact:true}).click();
-await panel.locator('#mode').selectOption('diagnostic');
-if(process.env.SCROLLFACT_TEST_API_URL) await panel.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL);
+await panel.getByRole('button',{name:/고급 설정/}).click();
+await panel.getByRole('radio',{name:'페이지 전송 점검',exact:true}).check();
+if(process.env.SCROLLFACT_TEST_API_URL) { await panel.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL); await panel.getByRole('button',{name:'적용',exact:true}).click(); }
 await panel.getByRole('button',{name:'닫기',exact:true}).click();
 await panel.getByRole('button',{name:'이 페이지 분석하기',exact:true}).click();
 await panel.getByText('서버 수신 완료 · 3개 문단',{exact:true}).waitFor({timeout:60000});

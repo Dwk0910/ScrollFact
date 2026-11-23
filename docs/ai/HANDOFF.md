@@ -1,5 +1,13 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 Gemini 제공자 추가
+
+사용자 요청으로 Google Gemini API를 추가했다. 서버 `SCROLLFACT_AI_PROVIDER=openai|gemini`로 선택하며 기본값은 openai다. Gemini는 `GEMINI_API_KEY`, `SCROLLFACT_GEMINI_MODEL`이 필요하다. `scripts/start-gemini-server.sh` / `.ps1`이 키·모델 입력과 제공자 선택을 처리한다. 브라우저는 키를 저장하지 않으며 연결 확인 시 실제 제공자와 모델을 표시한다. 실행 문서는 `docs/development/openai-reader.md`에 통합했다.
+
+공통 ReaderContract로 프롬프트·스키마·인용 검증을 공유한다. Gemini generateContent JSON Schema를 사용하며 미완성/차단/한도 오류는 결과 대신 오류를 반환한다. 제공자 실패 시 자동 전환하지 않는다. 실제 Gemini 호출과 Windows 스크립트 실행은 미검증이며 로컬 HTTP 계약과 제공자 선택 회귀 검사를 추가했다. 무료 이용은 모델·계정 한도에 따르며 무제한 무료를 보장하지 않는다.
+
+설정 UI는 TDS ListRow와 Apple의 계층형 설정 패턴을 참고해 목록 → AI 연결/읽기 동작/고급 설정 세부 페이지로 재구성했다. 행 크기·색·간격을 통일하고 고정 헤더/뒤로 가기·닫기, 펼치는 API 안내, 서버 주소 적용/검증을 제공한다. 프론트 lint/build/check:extension/API 8개 통과. 백엔드는 생성된 중복 class 파일로 한 차례 로딩 실패 후 clean 재빌드하여 30개 중 29개 통과·1개 생략, bootJar 성공. 실제 Whale의 빌드 화면에서 설정 이동·값 유지·주소 오류·Escape 닫기·320px 폭을 검증했다(상태 API 스텁, AI 실호출 아님). 캡처는 `output/settings-gemini-2026-11-24/`, 재검사 스크립트는 `frontend/tests/reader-settings.mjs`.
+
 ## 2026-11-24 OpenAI 리더 연결과 시작·설정 UI
 
 사용자가 OpenAI API를 선택했다. `mode: reader`와 Responses API 구조화 출력으로 본문/발언/부가정보 분류, 문단 해설, 5분류, 실제 인용 기반 관점 묶음을 연결했다. 원문 ID·인용·출처를 검증하고 원래 DOM 선택자를 유지한다. 부가정보는 패널에서 제외하되 DOM 문단 병합/분할은 아직 하지 않는다. 외부 검색과 별도 댓글 수집, 원문 문장별 5색 표시 및 해설 내부 밑줄은 후속이다. 과거 점수 API와 diagnostic 전송 점검은 보존한다.

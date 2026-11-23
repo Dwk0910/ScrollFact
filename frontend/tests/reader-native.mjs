@@ -29,9 +29,12 @@ if(process.env.SCROLLFACT_UI_DIR) {
   await frame.getByRole('button',{name:'닫기',exact:true}).click();
 }
 await frame.getByRole('button',{name:'설정',exact:true}).click();
-await frame.locator('#mode').selectOption('diagnostic');
-if(process.env.SCROLLFACT_TEST_API_URL) await frame.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL);
+await frame.getByRole('button',{name:/고급 설정/}).click();
+await frame.getByRole('radio',{name:'페이지 전송 점검',exact:true}).check();
+if(process.env.SCROLLFACT_TEST_API_URL) { await frame.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL); await frame.getByRole('button',{name:'적용',exact:true}).click(); }
 if(process.env.SCROLLFACT_UI_DIR) {
+  await frame.getByRole('button',{name:'설정으로 돌아가기'}).click();
+  await frame.getByRole('button',{name:/AI 연결/}).click();
   await frame.getByRole('button',{name:'연결 확인',exact:true}).click();
   await frame.getByText('API 키 또는 모델이 설정되지 않았어요',{exact:true}).waitFor();
   await frame.locator('dialog').screenshot({path:join(process.env.SCROLLFACT_UI_DIR,'03-settings.png')});
