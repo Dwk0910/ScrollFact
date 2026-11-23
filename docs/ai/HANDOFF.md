@@ -1,5 +1,17 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 빈 줄 문단 추출과 해설 품질 보완
+
+사용자 전자신문 기사 https://www.etnews.com/20261103000313 는 p 하나에 br 두 개로 10개 본문 문단과 기자 정보를 구분한다. 사이트별 분기 없이 연속 br 빈 줄에서 분할, 단일 br은 유지한다. selector에 ::sf-paragraph(0부터) 범위를 붙이고 콘텐츠 스크립트는 DOM Range/CSS Custom Highlight로 원문을 변경하지 않고 문단 이동·강조한다. 서버/확장을 함께 갱신해야 한다. 현재 p/li/blockquote 후보 기반이며 div만으로 된 본문 등 모든 구조를 지원한다고 주장하지 않는다.
+
+의견 영역은 서로 다른 관점 2개 이상일 때 펼치며, 없거나 하나면 접고 분포 게이지를 숨긴다. 프롬프트는 같은 쟁점의 비교 가능한 입장만 허용하고 단순 행사 소개·지원 약속을 의견 분포로 만들지 않는다. 댓글 유무 판별/별도 댓글 수집을 구현한 것은 아니다. needs_verification은 '확인하지 않음'으로 표시하고 중립색으로 변경했다. 외부 대조 미실시를 자료 부족/거짓으로 단정하지 않도록 지침을 수정했다. 기존 5분류와 근거 인용 검증은 유지한다.
+
+해설은 모든 핵심 명제를 보존하는 재서술로 지침 강화. 실제 Gemini 1차 호출 성공(입력1911/출력2475토큰), 본문10+기자auxiliary1, perspectives0 확인. 원문 대조에서 사례 기능 일부 축약 및 '이달까지'→'이달 말까지' 구체화가 남아 추가로 기능 범위/날짜 보존 지침을 보완했다. 최종 지침 실제 재검사는 503이 3회 지속돼 종료했다(UUID4009c2d0-9b5b-4f4e-9d57-0a9134fefd22). 해설 완전성·서비스 안정성 해결로 과장하지 않는다. 추가 웹 검색/팩트체크 자동 수집은 이번 작업에 추가하지 않았다.
+
+검증: 실제 HTML 11구간 및 합성 타 도메인/단일br/상한 테스트, backend:test/bootJar, frontend lint/build/check:extension/API8개 통과. Whale에서 실제 HTML 원문11개 모두 매칭, 다섯 구간 수동 선택/강조 및 DOM 교체 복원 통과. 실제 1차 AI 결과를 주입한 UI에서 10문단/의견 접힘/게이지 없음/미확인 표시/이동 확인. tests/blank-line-browser.mjs 및 reader-quality-browser.mjs는 SCROLLFACT_PLAYWRIGHT_MODULE, SCROLLFACT_BROWSER_PATH, SCROLLFACT_ETNEWS_HTML, SCROLLFACT_PASSAGES, SCROLLFACT_RESULT로 외부 fixture 경로 지정. 실제 자료/키/결과는 커밋하지 않는다.
+
+연구 참고: https://jsoup.org/apidocs/org/jsoup/nodes/Element (text의 공백 정규화), https://developer.mozilla.org/en-US/docs/Web/API/CSS_Custom_Highlight_API (DOM 변경 없는 범위 강조).
+
 ## 2026-11-24 Gemini 503 제한 재시도
 
 오류 0080d266-e0a4-48db-9f05-b34b3898c248은 gemini-3.5-flash-lite 생성 요청의 HTTP503/UNAVAILABLE이다. 이전 신규 사용자 모델 접근 제한 404와 구분하며, 로그만으로 Google 전체 장애나 과부하의 세부 원인을 확정할 수 없다.

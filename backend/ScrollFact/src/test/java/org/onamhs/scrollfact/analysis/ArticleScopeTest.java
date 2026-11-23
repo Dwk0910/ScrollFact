@@ -73,6 +73,27 @@ class ArticleScopeTest {
         assertThat(parser.parse(html, "https://two.example/story").passages()).isEqualTo(expected);
     }
 
+    @Test void blankLineParagraphsKeepInlineTextAndStableParentAnchors() {
+        String html = "<article><p>첫 <b>문단</b><br>한 줄<br> \n<br/>둘째 문단<br><br><br>셋째 문단</p></article>";
+        for (String host : new String[]{"https://one.example", "https://two.example"}) {
+            var passages = parser.parse(html, host).passages();
+            assertThat(passages).extracting(p -> p.text()).containsExactly("첫 문단 한 줄", "둘째 문단", "셋째 문단");
+            for (int i = 0; i < 3; i++) assertThat(passages.get(i).selector()).endsWith("::sf-paragraph(" + i + ")");
+        }
+        assertThat(parser.parse("<article><p>주소<br>다음 줄</p></article>", url).passages()).hasSize(1);
+        assertThatThrownBy(() -> parser.parse("<article><p>" + "문단<br><br>".repeat(201) + "</p></article>", url)).isInstanceOf(ApiFailure.class);
+    }
+
+    @Test void optionalEtnewsBlankLineRegression() throws Exception {
+        String path = System.getenv("SCROLLFACT_ETNEWS_HTML");
+        org.junit.jupiter.api.Assumptions.assumeTrue(path != null);
+        var passages = parser.parse(java.nio.file.Files.readString(java.nio.file.Path.of(path)), "https://www.etnews.com/20261103000313").passages();
+        assertThat(passages).hasSize(11);
+        assertThat(passages.get(3).text()).contains("도전", "성장", "상상");
+        assertThat(passages.get(8).text()).contains("3000만원");
+        assertThat(passages.get(9).text()).contains("정우성");
+    }
+
     @Test void optionalDownloadedRegressionPage() throws Exception {
         String path = System.getenv("SCROLLFACT_TEST_HTML");
         org.junit.jupiter.api.Assumptions.assumeTrue(path != null);

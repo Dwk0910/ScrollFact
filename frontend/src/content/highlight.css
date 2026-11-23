@@ -9,3 +9,5 @@ html.scrollfact-open body {
   max-width: calc(100vw - var(--scrollfact-offset, 0px)) !important;
   margin-right: var(--scrollfact-offset, 0px) !important;
 }
+
+::highlight(scrollfact-paragraph) { background-color: #dceee6; color: inherit; }

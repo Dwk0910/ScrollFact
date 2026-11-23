@@ -1,3 +1,4 @@
+import { ParagraphTarget, paragraphRange } from './paragraphTarget'
 import { serializeUpload } from './snapshot'
 import {
   isRecord,
@@ -28,7 +29,7 @@ export function mountContentController(host: ContentHost) {
   let detachPanel: (() => void) | null = null
   let activeId: string | null = null
   let selectedId: string | null = null
-  let targets = new Map<string, HTMLElement>()
+  let targets = new Map<string, HTMLElement | ParagraphTarget>()
 
   const emit = host.emit
 
@@ -44,8 +45,8 @@ export function mountContentController(host: ContentHost) {
 
   function activate(id: string | null) {
     activeId = id
-    for (const [key, element] of targets)
-      element.classList.toggle('scrollfact-active', key === id)
+    for (const element of targets.values()) element.classList.remove('scrollfact-active')
+    if (id) targets.get(id)?.classList.toggle('scrollfact-active', true)
     if (id && snapshot) emit({
       type: MessageType.activeSectionChanged,
       snapshotId: snapshot.snapshotId,
@@ -92,9 +93,10 @@ export function mountContentController(host: ContentHost) {
     return `<!DOCTYPE html>\n${clone.outerHTML}`
   }
 
-  function matchElement(selector: string): HTMLElement | null {
+  function matchElement(selector: string): HTMLElement | ParagraphTarget | null {
     try {
-      const matches = document.querySelectorAll(selector)
+      const part = selector.match(/::sf-paragraph\((\d+)\)$/)
+      const matches = document.querySelectorAll(part ? selector.slice(0, part.index) : selector)
       if (matches.length !== 1) return null
       const element = matches[0]
       if (
@@ -105,6 +107,10 @@ export function mountContentController(host: ContentHost) {
         )
       )
         return null
+      if (part) {
+        const range = paragraphRange(element, Number(part[1]))
+        return range ? new ParagraphTarget(element, range) : null
+      }
       return element
     } catch {
       return null
@@ -133,7 +139,7 @@ export function mountContentController(host: ContentHost) {
     clearWatch()
     const unmatchedIds: string[] = []
     const originalText = new Map<string, string>()
-    const matchedElements = new Set<HTMLElement>()
+    const matchedElements = new Set<HTMLElement | ParagraphTarget>()
     for (const spec of specs) {
       const element = matchElement(spec.selector)
       if (!element || matchedElements.has(element) || (spec.text !== undefined && (element.textContent ?? '').replace(/\s+/g, ' ').trim() !== spec.text.replace(/\s+/g, ' ').trim())) {
@@ -167,7 +173,7 @@ export function mountContentController(host: ContentHost) {
         if (
           !element.isConnected ||
           !element.getClientRects().length ||
-          getComputedStyle(element).visibility === 'hidden'
+          getComputedStyle(element instanceof ParagraphTarget ? element.element : element).visibility === 'hidden'
         )
           continue
         const rect = element.getBoundingClientRect()

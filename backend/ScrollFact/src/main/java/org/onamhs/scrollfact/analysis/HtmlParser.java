@@ -19,12 +19,16 @@ public class HtmlParser {
         // Never mutate the DOM before deriving selectors: nth-of-type must match the source.
         for (var element : scope.select("p, li, blockquote")) {
             if (excluded(element) || element.children().stream().anyMatch(e -> !e.select("p, li, blockquote").isEmpty())) continue;
-            String text = element.text().trim();
-            if (text.isEmpty()) continue;
-            characters += text.length();
-            if (passages.size() >= 200 || characters > 200_000)
-                throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
-            passages.add(new Passage("section-" + (passages.size() + 1), selector(element), text));
+            var chunks = paragraphTexts(element);
+            for (int part = 0; part < chunks.size(); part++) {
+                String text = chunks.get(part);
+                if (text.isEmpty()) continue;
+                characters += text.length();
+                if (passages.size() >= 200 || characters > 200_000)
+                    throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
+                passages.add(new Passage("section-" + (passages.size() + 1), selector(element)
+                    + (chunks.size() > 1 ? "::sf-paragraph(" + part + ")" : ""), text));
+            }
         }
         if (passages.isEmpty()) throw new ApiFailure(422, "no_passages", "분석할 문단을 찾지 못했습니다.");
         for (var link : scope.select("a[href]")) {
@@ -43,6 +47,12 @@ public class HtmlParser {
         }
         return new ParsedPage(List.copyOf(passages), List.copyOf(links));
     }
+    // Blank lines delimit paragraphs; a single line break (address/verse) does not.
+    static List<String> paragraphTexts(Element element) {
+        String[] parts = element.html().split("(?i)<br\\s*/?>(?:[\\s\\u00a0]*<br\\s*/?>)+", -1);
+        return Arrays.stream(parts).map(part -> Jsoup.parseBodyFragment(part).body().text().trim()).toList();
+    }
+
     // Scope extraction without cloning/removing nodes: source selectors must stay valid.
     private Element contentRoot(org.jsoup.nodes.Document document) {
         for (String selector : List.of("[itemprop~=articleBody]", "article", "main, [role=main]")) {
