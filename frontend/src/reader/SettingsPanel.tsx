@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import ProfileAccount from './ProfileAccount'
+import type { Profile } from './profile'
 import AiConnection from './AiConnection'
 import { ChevronLeft, ChevronRight, X, Cpu, SlidersHorizontal, AlignLeft, Check } from 'lucide-react'
 
 type Preferences = { server: string; follow: boolean; mode: 'reader' | 'diagnostic' }
-type Props = { preferences: Preferences; change: (next: Partial<Preferences>) => void; busy: boolean; checking: boolean; connection: string; saveNotice: string; checkConnection: () => Promise<void>; close: () => void }
-type Page = 'home' | 'ai' | 'reading' | 'advanced'
-const titles: Record<Page, string> = { home: '설정', ai: 'AI 연결', reading: '읽기 동작', advanced: '고급 설정' }
+type Props = { profile: Profile | null; updateProfile: (p: Profile | null) => void; preferences: Preferences; change: (next: Partial<Preferences>) => void; busy: boolean; checking: boolean; connection: string; saveNotice: string; checkConnection: () => Promise<void>; close: () => void }
+type Page = 'home' | 'account' | 'ai' | 'reading' | 'advanced'
+const titles: Record<Page, string> = { home: '설정', account: '계정', ai: 'AI 연결', reading: '읽기 동작', advanced: '고급 설정' }
 function Row({ icon, title, value, onClick }: { icon: ReactNode; title: string; value: string; onClick: () => void }) {
   return <button className="settings-nav-row" onClick={onClick}><span className="settings-row-icon">{icon}</span><span>{title}</span><span className="settings-value">{value}</span><ChevronRight size={15} aria-hidden="true" /></button>
 }
-export default function SettingsPanel({ preferences, change, busy, checking, connection, saveNotice, checkConnection, close }: Props) {
+export default function SettingsPanel({ profile, updateProfile, preferences, change, busy, checking, connection, saveNotice, checkConnection, close }: Props) {
   const [page, setPage] = useState<Page>('home')
   const [server, setServer] = useState(preferences.server)
   const [error, setError] = useState('')
@@ -29,11 +31,13 @@ export default function SettingsPanel({ preferences, change, busy, checking, con
     </header>
     <div className="settings-body">
       {page === 'home' && <><p className="settings-section-label">환경 설정</p><div className="settings-group">
+        <Row icon={<Cpu size={17} />} title="계정" value={profile?.id || '로그인'} onClick={() => setPage('account')} />
         <Row icon={<Cpu size={17} />} title="AI 연결" value="제공자 · 모델" onClick={() => setPage('ai')} />
         <Row icon={<AlignLeft size={17} />} title="읽기 동작" value={preferences.follow ? '자동 따라가기' : '수동 이동'} onClick={() => setPage('reading')} />
         <Row icon={<SlidersHorizontal size={17} />} title="고급 설정" value={preferences.mode === 'reader' ? 'AI 분석' : '전송 점검'} onClick={() => setPage('advanced')} />
-      </div><p className="settings-footnote">읽기 설정은 이 브라우저에 저장돼요.</p></>}
-      {page === 'ai' && <><AiConnection server={preferences.server} disabled={busy} saved={checkConnection} /><p className="settings-section-label">연결된 AI</p><div className="settings-group"><div className="settings-info-row"><span>지원 제공자</span><span>OpenAI · Gemini</span></div><div className="settings-info-row"><span>연결 방식</span><span>서버 API 키</span></div><button className="settings-action-row" onClick={() => void checkConnection()} disabled={checking}>{checking ? '확인 중…' : '연결 확인'}<ChevronRight size={15} /></button></div><p className="settings-footnote connection-status" role="status">{connection}</p>
+      </div><p className="settings-footnote">로그인하면 계정별로 설정을 불러와요.</p></>}
+      {page === 'account' && <ProfileAccount key={preferences.server} server={preferences.server} profile={profile} update={updateProfile} disabled={busy} />}
+      {page === 'ai' && <><AiConnection key={preferences.server} profile={profile} updateProfile={updateProfile} login={() => setPage('account')} server={preferences.server} disabled={busy} saved={checkConnection} /><p className="settings-section-label">연결된 AI</p><div className="settings-group"><div className="settings-info-row"><span>지원 제공자</span><span>OpenAI · Gemini</span></div><div className="settings-info-row"><span>연결 방식</span><span>서버 API 키</span></div><button className="settings-action-row" onClick={() => void checkConnection()} disabled={checking}>{checking ? '확인 중…' : '연결 확인'}<ChevronRight size={15} /></button></div><p className="settings-footnote connection-status" role="status">{connection}</p>
         <p className="settings-footnote">연결 확인은 서버 설정 유무를 확인해요. 실제 API 인증은 분석할 때 진행돼요.</p>
 
       </>}

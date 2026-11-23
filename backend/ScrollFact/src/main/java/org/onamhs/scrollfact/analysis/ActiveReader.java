@@ -26,7 +26,11 @@ public class ActiveReader {
     }
     public boolean configured() { var o = override; return o != null ? (o.gemini() != null ? o.gemini().configured() : o.openai().configured()) : provider.equals("gemini") ? gemini.configured() : openai.configured(); }
     public Map<String, Object> status() { var o = override; return o != null ? (o.gemini() != null ? o.gemini().status() : o.openai().status()) : provider.equals("gemini") ? gemini.status() : openai.status(); }
-    public Completion analyze(EvaluationInput input) throws Exception {
-        var o = override; return o != null ? (o.gemini() != null ? o.gemini().analyze(input) : o.openai().analyze(input)) : provider.equals("gemini") ? gemini.analyze(input) : openai.analyze(input);
+    @FunctionalInterface public interface RequestReader { Completion analyze(EvaluationInput input) throws Exception; }
+    public RequestReader snapshot() {
+        var o = override;
+        if (o != null) return o.gemini() != null ? o.gemini()::analyze : o.openai()::analyze;
+        return provider.equals("gemini") ? gemini::analyze : openai::analyze;
     }
+    public Completion analyze(EvaluationInput input) throws Exception { return snapshot().analyze(input); }
 }

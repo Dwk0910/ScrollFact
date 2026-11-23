@@ -12,11 +12,14 @@ class ReaderSettingsTest {
         var active = new ActiveReader("openai", mock(OpenAiReader.class), mock(GeminiReader.class));
         var catalog = mock(ModelCatalog.class);
         when(catalog.list("gemini", "test-secret")).thenReturn(List.of(new ModelCatalog.Model("gemini-test", "Test")));
-        var controller = new ReaderSettingsController(active, catalog);
+        var profiles = mock(ProfileService.class);
+        when(profiles.key("alice", "gemini", "test-secret")).thenReturn("test-secret");
+        doAnswer(invocation -> { active.configure("gemini", "test-secret", "gemini-test"); return null; }).when(profiles).save("alice", "gemini", "test-secret", "gemini-test");
+        var controller = new ReaderSettingsController(active, catalog, profiles);
         var request = new MockHttpServletRequest(); request.setRemoteAddr("127.0.0.1");
-        var config = new ReaderSettingsController.Configuration("gemini", "test-secret", "gravity");
+        var config = new ReaderSettingsController.Configuration("gemini", "test-secret", "gravity", "alice");
         assertThatThrownBy(() -> controller.configure(config, request)).isInstanceOf(ApiFailure.class);
-        var response = controller.configure(new ReaderSettingsController.Configuration("gemini", "test-secret", "gemini-test"), request);
+        var response = controller.configure(new ReaderSettingsController.Configuration("gemini", "test-secret", "gemini-test", "alice"), request);
         assertThat(response.getBody().toString()).contains("Google Gemini", "gemini-test").doesNotContain("test-secret");
         assertThat(config.toString()).doesNotContain("test-secret");
         request.setRemoteAddr("192.0.2.1");

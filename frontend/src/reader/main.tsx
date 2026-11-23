@@ -7,6 +7,7 @@ import { isRecord, type AnalysisProgress } from '../types'
 import type { ReaderCheck } from '../api/analyze'
 import './style.css'
 import SettingsPanel from './SettingsPanel'
+import { asProfile, profileRequest, type Profile } from './profile'
 
 const phases: Record<AnalysisProgress['phase'], string> = {
   capturing: '읽던 페이지를 가져오고 있어요', compressing: '페이지를 준비하고 있어요', uploading: '분석할 내용을 전달하고 있어요',
@@ -25,6 +26,7 @@ function loadPreferences(): Preferences {
 
 export default function Reader() {
   const [preferences, setPreferences] = useState(loadPreferences)
+  const [profile, setProfile] = useState<Profile | null>(null)
   const { result, busy, notice, active, progress, upload, cancel, jump, inExtension } = useUpload(preferences.follow)
   const [view, setView] = useState<'about' | 'settings' | null>(null)
   const [connection, setConnection] = useState('연결 상태를 확인해 주세요')
@@ -41,7 +43,33 @@ export default function Reader() {
     else dialog.current?.close()
   }, [view])
   useEffect(() => () => connectionTask.current?.abort(), [])
+  function applyProfile(p: Profile | null) {
+    setProfile(p)
+    if (p?.id) {
+      setPreferences(previous => {
+        const updated = { ...previous, follow: p.follow, mode: p.mode }
+        try { localStorage.setItem('scrollfact.reader.preferences', JSON.stringify(updated)) } catch { /* Session state still applies. */ }
+        return updated
+      })
+    }
+  }
+  useEffect(() => {
+    const controller = new AbortController()
+    void profileRequest(preferences.server, 'profile', undefined, controller.signal)
+      .then(data => { if (!controller.signal.aborted) applyProfile(asProfile(data)) })
+      .catch(() => { if (!controller.signal.aborted) setProfile(null) })
+    return () => controller.abort()
+  }, [preferences.server])
   function change(next: Partial<Preferences>) {
+    if (profile?.id && (next.follow !== undefined || next.mode !== undefined)) {
+      void profileRequest(preferences.server, 'profile/preferences', { id: profile.id, follow: next.follow ?? preferences.follow, mode: next.mode ?? preferences.mode })
+        .then(data => { applyProfile(asProfile(data)); setSaveNotice('계정에 설정을 저장했어요') })
+        .catch(e => setSaveNotice(e instanceof Error ? e.message : '설정을 저장하지 못했어요'))
+      return
+    }
+    changeLocal(next)
+  }
+  function changeLocal(next: Partial<Preferences>) {
     const updated = { ...preferences, ...next }
     setPreferences(updated)
     try { localStorage.setItem('scrollfact.reader.preferences', JSON.stringify(updated)); setSaveNotice('설정을 저장했어요') }
@@ -87,7 +115,7 @@ export default function Reader() {
       <details className="receipt"><summary>분석 정보</summary>{analysis ? <><p>AI 모델 · {analysis.model}</p><p>부가정보로 분류된 블록 {analysis.excludedBlocks}개</p><p>입력 {analysis.inputTokens.toLocaleString()} · 출력 {analysis.outputTokens.toLocaleString()} 토큰</p><p>AI 판단은 오류가 있을 수 있어요. 연결된 원문과 근거를 함께 확인해 주세요.</p></> : <p>연결 점검 결과입니다. AI 분석은 실행하지 않았어요.</p>}</details>
     </main>}
     <dialog ref={dialog} onCancel={() => setView(null)} onClose={() => setView(null)} className="sheet" aria-label={view === 'settings' ? '설정' : 'ScrollFact란?'}>{view === 'about' && <div className="sheet-header"><h2>{view === 'about' ? 'ScrollFact란?' : '설정'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setView(null)}><X size={18} /></button></div>}
-      {view === 'about' ? <div className="about-content"><span className="eyebrow">READ WITH CONTEXT</span><h2>같은 글,<br />다른 생각.<br /><span>이유를 읽는 시간.</span></h2><p className="about-lead">답글을 쓰기 전에,<br />상대가 왜 그렇게 말했는지.</p><div className="about-feature"><span>01</span><h3>글의 맥락을 읽어요</h3><p>문단의 주장과 앞뒤 흐름을 살피고, 자료와 대조할 부분을 원문에 연결해 확인해요.</p></div><div className="about-feature"><span>02</span><h3>관점과 이유를 함께 봐요</h3><p>찬반이라는 한마디보다, 글에 드러난 각자의 이유를 먼저 읽어요. 의견의 차이를 사실의 오류와 구분해요.</p></div><p className="about-note">ScrollFact는 판단을 대신하지 않아요.<br />원문과 근거를 읽고 스스로 판단하도록 돕습니다.</p></div> : view === 'settings' ? <SettingsPanel preferences={preferences} change={change} busy={busy} checking={checking} connection={connection} saveNotice={saveNotice} checkConnection={checkConnection} close={() => setView(null)} /> : null}
+      {view === 'about' ? <div className="about-content"><span className="eyebrow">READ WITH CONTEXT</span><h2>같은 글,<br />다른 생각.<br /><span>이유를 읽는 시간.</span></h2><p className="about-lead">답글을 쓰기 전에,<br />상대가 왜 그렇게 말했는지.</p><div className="about-feature"><span>01</span><h3>글의 맥락을 읽어요</h3><p>문단의 주장과 앞뒤 흐름을 살피고, 자료와 대조할 부분을 원문에 연결해 확인해요.</p></div><div className="about-feature"><span>02</span><h3>관점과 이유를 함께 봐요</h3><p>찬반이라는 한마디보다, 글에 드러난 각자의 이유를 먼저 읽어요. 의견의 차이를 사실의 오류와 구분해요.</p></div><p className="about-note">ScrollFact는 판단을 대신하지 않아요.<br />원문과 근거를 읽고 스스로 판단하도록 돕습니다.</p></div> : view === 'settings' ? <SettingsPanel profile={profile} updateProfile={applyProfile} preferences={preferences} change={change} busy={busy} checking={checking} connection={connection} saveNotice={saveNotice} checkConnection={checkConnection} close={() => setView(null)} /> : null}
 
     </dialog>
   </div>

@@ -44,7 +44,8 @@ public class AnalysisService {
         entity.status = "queued"; entity.phase = "queued"; entity.createdAt = System.currentTimeMillis();
         repository.saveAndFlush(entity);
         // Register before execution so a very fast worker cannot leave a completed Future in the map.
-        var task = new FutureTask<Void>(() -> { process(entity.id, input); return null; });
+        var selectedReader = reader.snapshot();
+        var task = new FutureTask<Void>(() -> { process(entity.id, input, selectedReader); return null; });
         running.put(entity.id, task);
         try { workers.execute(task); }
         catch (RejectedExecutionException e) {
@@ -92,7 +93,7 @@ public class AnalysisService {
         });
     }
     private static boolean terminal(AnalysisEntity e) { return "completed".equals(e.status) || "failed".equals(e.status); }
-    private void process(String id, UploadReader.Input input) {
+    private void process(String id, UploadReader.Input input, ActiveReader.RequestReader selectedReader) {
         var pending = new ArrayList<Future<SourceDocument>>();
         try {
             progress(id, "extracting", null, 0, 0);
@@ -118,7 +119,7 @@ public class AnalysisService {
             }
             progress(id, "summarizing", pending.size(), pending.size(), failed);
             if ("reader".equals(meta.mode())) {
-                var completionResult = reader.analyze(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
+                var completionResult = selectedReader.analyze(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
                 var output = completionResult.output();
                 var byId = new HashMap<String, ReaderModels.Block>();
                 output.blocks().forEach(b -> byId.put(b.id(), b));
