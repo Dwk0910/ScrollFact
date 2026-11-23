@@ -33,6 +33,7 @@ class AnalysisApiTest {
     @Autowired AnalysisRepository repository;
     @Autowired AnalysisService service;
     @MockitoBean AnalysisEvaluator evaluator;
+    @MockitoBean OpenAiReader reader;
     @MockitoBean PublicSourceFetcher fetcher;
     private static final String HTML = "<html><body><nav><p>메뉴</p></nav><article><p>검증할 주장 <a href='https://evidence.example/report'>출처</a></p><p>두 번째 문단 <a href='https://evidence.example/report#part'>같은 출처</a></p></article></body></html>";
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) throws Exception {
@@ -72,6 +73,25 @@ class AnalysisApiTest {
         }
         throw new AssertionError("Analysis never reached " + status);
     }
+    @Test void readerModePreservesOriginalSelectorsAndOmitsAuxiliaryWithoutScores() throws Exception {
+        when(reader.configured()).thenReturn(true);
+        when(reader.analyze(any())).thenAnswer(invocation -> {
+            EvaluationInput input = invocation.getArgument(0);
+            var blocks = List.of(new ReaderModels.Block(input.passages().get(0).id(), "auxiliary", "", "", List.of()),
+                new ReaderModels.Block(input.passages().get(1).id(), "body", "본문 제목", "문단 해설", List.of()));
+            return new ReaderModels.Completion(new ReaderModels.Output(blocks, List.of()), "test-model", 123, 45);
+        });
+        String id = create(UUID.randomUUID().toString(), HTML, "reader").path("analysisId").asText();
+        waitFor(id, "completed");
+        mvc.perform(get("/v1/analyses/" + id + "/result")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.kind").value("reader")).andExpect(jsonPath("$.schemaVersion").value("2.0"))
+            .andExpect(jsonPath("$.passages.length()").value(1)).andExpect(jsonPath("$.excludedBlocks").value(1))
+            .andExpect(jsonPath("$.passages[0].selector").value("html > body > article > p:nth-of-type(2)"))
+            .andExpect(jsonPath("$.blocks[0].summary").value("문단 해설"))
+            .andExpect(jsonPath("$.inputTokens").value(123)).andExpect(jsonPath("$.overview").doesNotExist());
+        verify(evaluator, never()).evaluate(any());
+    }
+
     @Test void createsPollsAndReadsResultWithDeduplicatedSources() throws Exception {
         String snapshot = UUID.randomUUID().toString();
         JsonNode created = create(snapshot, HTML);

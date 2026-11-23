@@ -1,5 +1,7 @@
 # ScrollFact REST API · v1
 
+> 최신 확장은 `mode: reader`로 OpenAI 분석을 요청합니다. 서버의 `OPENAI_API_KEY`·`SCROLLFACT_OPENAI_MODEL` 설정이 필요합니다. 아래 diagnostic 설명은 전송 점검 모드에 해당합니다. 실행 및 schemaVersion 2.0 계약은 [OpenAI 안내](../../docs/development/openai-reader.md)를 참고하세요.
+
 기계 판독용 계약: [OpenAPI 3.1](../../backend/ScrollFact/src/main/resources/static/openapi.yaml). 구현: Spring Boot + SQLite. AI 제공자는 `AnalysisEvaluator` 인터페이스로 교체한다.
 
 프론트엔드는 사용자가 분석 버튼을 누를 때 **현재 원문의 `document.documentElement.outerHTML` 전체**를 전달한다. 문단 분리, 요약, 주장 추출, 점수 산출, 판정, 근거 선택, watch 대상 결정은 모두 백엔드 책임이다. 프론트는 응답을 검증·표시하고 지정된 DOM 요소의 위치만 감지한다.

@@ -24,7 +24,11 @@ await page.evaluate(async bundle=>{
  window.sfHandler({type:'SF_TOGGLE_PANEL'},()=>{});
 },bundle);
 const panel=page.frameLocator('iframe');
-await panel.getByRole('button',{name:'현재 페이지 보내기',exact:true}).click();
+await panel.getByRole('button',{name:'설정',exact:true}).click();
+await panel.locator('#mode').selectOption('diagnostic');
+if(process.env.SCROLLFACT_TEST_API_URL) await panel.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL);
+await panel.getByRole('button',{name:'닫기',exact:true}).click();
+await panel.getByRole('button',{name:'이 페이지 분석하기',exact:true}).click();
 await panel.getByText('서버 수신 완료 · 3개 문단',{exact:true}).waitFor({timeout:60000});
 await panel.getByRole('button',{name:'다음 문단',exact:true}).click();
 await panel.getByText('2 / 3 문단',{exact:true}).waitFor();
@@ -37,7 +41,7 @@ assert.ok(capture.snapshot.html.includes('학교 축제 부스 운영 방법'));
 // Text mismatch must not bind to a different paragraph at the same selector.
 const mismatch=await page.evaluate(id=>new Promise(resolve=>window.sfHandler({type:'SF_WATCH_SECTIONS',snapshotId:id,targets:[{id:'bad',selector:'#one',text:'different text'}]},resolve)),capture.snapshot.snapshotId);
 assert.deepEqual(mismatch.unmatchedIds,['bad']);
-await panel.getByRole('button',{name:'현재 페이지 다시 보내기'}).click();
+await panel.getByRole('button',{name:'다시 분석',exact:true}).click();
 await panel.getByText('서버 수신 완료 · 3개 문단',{exact:true}).waitFor();
 await page.locator('#one').evaluate(el=>el.textContent='원문 내용이 변경되었습니다.');
 await panel.getByText('원문이 변경되었습니다. 현재 페이지를 다시 보내 주세요.',{exact:true}).waitFor();

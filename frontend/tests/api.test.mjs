@@ -243,3 +243,25 @@ test('diagnostic mode uses the same upload and polling flow without accepting AI
   returned = fixture
   await assert.rejects(run(snapshot, new AbortController().signal), /형식/)
 })
+
+test('reader mode validates source-bound blocks and perspective quotes', async () => {
+  const result = {
+    schemaVersion: '2.0', kind: 'reader', analysisId: queued.analysisId, snapshotId: snapshot.snapshotId,
+    document: { url: snapshot.url, title: '제목' }, htmlBytes: 100, excludedBlocks: 1,
+    model: 'test-model', inputTokens: 100, outputTokens: 20,
+    passages: [{ id: 'p1', selector: 'article > p', text: '발표 기회가 필요합니다.' }],
+    blocks: [{ id: 'p1', kind: 'body', title: '제목', summary: '해설', checks: [{ quote: '발표 기회', status: 'opinion', reason: '이유', evidence: [] }] }],
+    perspectives: [{ label: '기회 요청', entries: [{ blockId: 'p1', quote: '발표 기회', reason: '명시된 이유 없음' }] }],
+  }
+  const api = setup(async (_url, init) => {
+    if (init.method === 'POST') {
+      assert.equal(JSON.parse(await init.body.get('metadata').text()).mode, 'reader')
+      return response(completed, 202)
+    }
+    return response(result)
+  })
+  assert.equal((await api.createReaderAnalyzer('https://api.example.com')(snapshot, new AbortController().signal)).kind, 'reader')
+  assert.equal(api.isReaderResult({ ...result, blocks: [] }), false)
+  const wrong = structuredClone(result); wrong.perspectives[0].entries[0].quote = '만든 발언'
+  assert.equal(api.isReaderResult(wrong), false)
+})

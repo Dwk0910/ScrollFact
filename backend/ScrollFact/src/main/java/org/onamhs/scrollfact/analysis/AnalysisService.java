@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 public class AnalysisService {
     private final AnalysisRepository repository;
     private final AnalysisEvaluator evaluator;
+    private final OpenAiReader reader;
     private final HtmlParser parser;
     private final PublicSourceFetcher fetcher;
     private final ResultAssembler assembler;
@@ -23,8 +24,9 @@ public class AnalysisService {
     private final ExecutorService sources = Executors.newFixedThreadPool(4);
     private final ConcurrentMap<String, Future<?>> running = new ConcurrentHashMap<>();
     public AnalysisService(AnalysisRepository repository, AnalysisEvaluator evaluator, HtmlParser parser,
-                           PublicSourceFetcher fetcher, ResultAssembler assembler, ObjectMapper mapper) {
+                           PublicSourceFetcher fetcher, ResultAssembler assembler, ObjectMapper mapper, OpenAiReader reader) {
         this.repository = repository; this.evaluator = evaluator; this.parser = parser;
+        this.reader = reader;
         this.fetcher = fetcher; this.assembler = assembler; this.mapper = mapper;
     }
     public synchronized JobView create(UploadReader.Input input) {
@@ -34,7 +36,8 @@ public class AnalysisService {
             if (!existing.get().digest.equals(input.digest())) throw new ApiFailure(409, "idempotency_conflict", "같은 snapshotId에 다른 페이지 내용이 전달되었습니다.");
             return view(existing.get());
         }
-        if (!"diagnostic".equals(meta.mode()) && !evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
+        if ("reader".equals(meta.mode()) && !reader.configured()) throw new ApiFailure(503, "reader_unconfigured", "서버에 OPENAI_API_KEY와 SCROLLFACT_OPENAI_MODEL을 설정해 주세요.");
+        if ("analysis".equals(meta.mode()) && !evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
         if (repository.count() >= 1000) throw new ApiFailure(429, "capacity_exceeded", "보관 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.");
         var entity = new AnalysisEntity();
         entity.id = UUID.randomUUID().toString(); entity.snapshotId = meta.snapshotId(); entity.digest = input.digest();
@@ -114,6 +117,17 @@ public class AnalysisService {
                 return;
             }
             progress(id, "summarizing", pending.size(), pending.size(), failed);
+            if ("reader".equals(meta.mode())) {
+                var completionResult = reader.analyze(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
+                var output = completionResult.output();
+                var byId = new HashMap<String, ReaderModels.Block>();
+                output.blocks().forEach(b -> byId.put(b.id(), b));
+                var retained = page.passages().stream().filter(p -> !byId.get(p.id()).kind().equals("auxiliary")).toList();
+                complete(id, new ReaderModels.Result("2.0", "reader", id, meta.snapshotId(), new DocumentInfo(meta.url(), meta.title()),
+                    meta.htmlBytes(), retained, retained.stream().map(p -> byId.get(p.id())).toList(), output.perspectives(),
+                    page.passages().size() - retained.size(), completionResult.model(), completionResult.inputTokens(), completionResult.outputTokens()));
+                return;
+            }
             Evaluation evaluation = evaluator.evaluate(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
             complete(id, assembler.assemble(id, meta, page, documents, evaluation));
         } catch (InterruptedException | CancellationException e) { Thread.currentThread().interrupt(); }

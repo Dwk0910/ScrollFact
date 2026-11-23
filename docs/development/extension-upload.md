@@ -1,5 +1,7 @@
 # 1단계: 확장 프로그램과 페이지 전송
 
+> 최신 확장은 `mode: reader`로 OpenAI 분석을 요청합니다. 서버의 `OPENAI_API_KEY`·`SCROLLFACT_OPENAI_MODEL` 설정이 필요합니다. 아래 diagnostic 설명은 전송 점검 모드에 해당합니다. 실행 및 schemaVersion 2.0 계약은 [OpenAI 안내](openai-reader.md)를 참고하세요.
+
 이번 단계는 확장 패널 → 현재 페이지 HTML 캡처 → gzip 업로드 → 서버 문단 추출 → 원문 위치 연결이다. AI 요약·5분류 판단·전체 의견 게이지의 실제 데이터 연결은 다음 단계다. 과거 점수 API를 새로운 분석 계약으로 사용하지 않는다.
 
 ## 실행

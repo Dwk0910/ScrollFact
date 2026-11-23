@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { createDiagnosticAnalyzer, type DiagnosticResult } from '../api/analyze'
+import { createDiagnosticAnalyzer, createReaderAnalyzer, type ReaderResult, type DiagnosticResult } from '../api/analyze'
 import { isDocumentSnapshot, isRecord, MessageType, type AnalysisProgress } from '../types'
 
-export function useUpload() {
+export function useUpload(followSource = true) {
   const tab = useRef<number | null>(null)
   const task = useRef<AbortController | null>(null)
-  const current = useRef<DiagnosticResult | null>(null)
-  const [result, setResult] = useState<DiagnosticResult | null>(null)
+  const current = useRef<DiagnosticResult | ReaderResult | null>(null)
+  const [result, setResult] = useState<DiagnosticResult | ReaderResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
   const [active, setActive] = useState(0)
   const [progress, setProgress] = useState<AnalysisProgress>({ phase: 'capturing' })
   const inExtension = typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id)
+
+  const follow = useRef(followSource)
+  useEffect(() => { follow.current = followSource }, [followSource])
 
   useEffect(() => {
     if (!inExtension) return
@@ -22,7 +25,7 @@ export function useUpload() {
         current.current = null; setResult(null); setBusy(false)
         setNotice('원문이 변경되었습니다. 현재 페이지를 다시 보내 주세요.')
       }
-      if (message.type === MessageType.activeSectionChanged && message.snapshotId === current.current?.snapshotId) {
+      if (follow.current && message.type === MessageType.activeSectionChanged && message.snapshotId === current.current?.snapshotId) {
         const index = current.current?.passages.findIndex(p => p.id === message.sectionId) ?? -1
         if (index >= 0) setActive(index)
       }
@@ -40,7 +43,7 @@ export function useUpload() {
     setNotice('전송을 중단했습니다.')
   }
 
-  async function upload(baseUrl: string) {
+  async function upload(baseUrl: string, mode: 'reader' | 'diagnostic' = 'reader') {
     if (!inExtension) { setNotice('설치한 확장 프로그램에서 페이지를 보내 주세요.'); return }
     task.current?.abort()
     const controller = new AbortController()
@@ -61,7 +64,7 @@ export function useUpload() {
       if (!valid()) return
       if (!isRecord(captured) || captured.ok !== true || !isDocumentSnapshot(captured.snapshot))
         throw new Error(isRecord(captured) && typeof captured.error === 'string' ? captured.error : '원문을 가져오지 못했습니다. 페이지를 새로고침해 주세요.')
-      const response = await createDiagnosticAnalyzer(url.href.replace(/\/$/, ''))(captured.snapshot, controller.signal, p => { if (valid()) setProgress(p) })
+      const response = await (mode === 'reader' ? createReaderAnalyzer : createDiagnosticAnalyzer)(url.href.replace(/\/$/, ''))(captured.snapshot, controller.signal, p => { if (valid()) setProgress(p) })
       if (!valid()) return
       const watched: unknown = await chrome.tabs.sendMessage(tab.current, {
         type: MessageType.watchSections, snapshotId: response.snapshotId,

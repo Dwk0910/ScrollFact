@@ -4,9 +4,13 @@
 
 **새 컴퓨터에서 AI와 이어서 작업할 때는 [AGENTS.md](AGENTS.md)와 [AI 인수인계](docs/ai/HANDOFF.md)를 먼저 읽게 하세요.** 이 자료는 프로젝트 대화의 주요 결정과 현재 코드를 정리한 것이며 Codex 채팅 세션 전체를 복원하는 파일은 아닙니다.
 
+## OpenAI 분석 연결 (2026-11-24)
+
+기본 확장 화면에서 **이 페이지 분석하기**를 누르면 서버가 OpenAI로 본문 구분·문단 해설·구절 판단·관점 묶음을 요청한다. 서버에 API 키와 모델 설정이 필요하다. [OpenAI 실행 안내](docs/development/openai-reader.md)를 먼저 확인한다. 실제 키가 없는 경우 설정에서 페이지 전송 점검 모드를 사용할 수 있다.
+
 ## 실제 확장 개발: 페이지 전송 (2026-11-24)
 
-기본 확장 패널을 `reader.html`로 전환했다. 위쪽은 글 전체 의견, 아래쪽은 현재 문단이며, 현재 페이지를 서버로 보내 실제 추출 문단을 확인할 수 있다. AI 해설·관점 분류는 다음 단계다. [설치와 전송 확인](docs/development/extension-upload.md)을 따른다. 기존 festival 및 점수 기반 실험 화면은 비교용으로 보존했다.
+기본 확장 패널을 `reader.html`로 전환했다. 위쪽은 글 전체 의견, 아래쪽은 현재 문단이며, 현재 페이지를 서버로 보내 실제 추출 문단을 확인할 수 있다. OpenAI 해설·관점 분류는 위 실행 안내에 따라 설정한다. [설치와 전송 확인](docs/development/extension-upload.md)을 따른다. 기존 festival 및 점수 기반 실험 화면은 비교용으로 보존했다.
 
 ## Windows에서 시작
 
@@ -39,7 +43,7 @@ PowerShell에서 `npm.ps1` 실행 정책 오류가 나면 `npm` 대신 `npm.cmd`
 
 기본 주소는 `http://127.0.0.1:8080`입니다. macOS/Linux에서는 `./gradlew`를 사용합니다. Gradle은 wrapper가 내려받습니다.
 
-진단 업로드·문단 추출·출처 수집·작업 조회는 구현되어 있습니다. **실제 AI 제공자는 미연결 상태**이며 기본 분석 요청은 설정이 없으면 503을 반환합니다. 설정과 계약은 [백엔드 안내](backend/ScrollFact/README.md) 및 [API 명세](frontend/docs/backend-api.md)를 참고하세요. Spring은 `.env` 파일을 자동 로드하지 않습니다.
+진단 업로드·문단 추출·출처 수집·작업 조회는 구현되어 있습니다. **OpenAI 리더 분석은 서버 키·모델 설정 후 사용**하며, 과거 점수 기반 analysis 모드는 별도 제공자 설정 없이는 503을 반환합니다. 설정과 계약은 [백엔드 안내](backend/ScrollFact/README.md) 및 [API 명세](frontend/docs/backend-api.md)를 참고하세요. Spring은 `.env` 파일을 자동 로드하지 않습니다.
 
 ## 확장 프로그램과 검증
 
@@ -73,7 +77,8 @@ Chrome/웨일의 확장 관리 화면에서 개발자 모드를 켜고 `frontend
 ```text
 이 저장소의 AGENTS.md, docs/ai/HANDOFF.md, README.md를 먼저 읽어줘.
 최신 방향은 문장에 연결된 사람들의 의견과 이유를 먼저 보여주는 것이고,
-현재 festival.html의 1단계 확장 형태 데모까지 구현되어 있어.
+현재 reader.html의 실제 확장과 OpenAI 서버 연동 코드가 구현되어 있어.
+실제 API 호출 검증 상태와 남은 작업은 최신 인수인계를 확인해줘.
 이전 점수판과 11월 1일 코칭 자료는 역사적 참고 자료야.
 현재 코드와 인수인계에서 확인되는 완료 상태·남은 작업을 짧게 정리한 뒤,
 내 다음 요청에 맞춰 이어서 작업해줘.

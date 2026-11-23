@@ -298,14 +298,14 @@ export function mountContentController(host: ContentHost) {
     root.dataset.scrollfactRoot = 'true'
     const shadow = root.attachShadow({ mode: host.shadowMode ?? 'closed' })
     shadow.innerHTML = `<style>
-      :host { all: initial; position: fixed !important; inset: 0 0 0 auto !important; height: 100dvh !important; z-index: 2147483646 !important; background: #f8faf8 !important; box-shadow: -8px 0 30px #2034280c !important; }
+      :host { all: initial; position: fixed !important; inset: 0 0 0 auto !important; height: 100dvh !important; z-index: 2147483646 !important; background: #ffffff !important; box-shadow: -8px 0 30px #2034280c !important; }
       .shell { display: flex; height: 100%; width: 100%; font-family: sans-serif; }
       .handle { width: 7px; flex-shrink: 0; border: 0; border-left: 1px solid #dfe7db; background: #edf2e9; cursor: ew-resize; touch-action: none; padding: 0; }
       .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-      .tools { height: 25px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-bottom: 1px solid #e2e9df; background: #f2f6ef; padding: 0 8px; }
-      .tools button { border: 0; background: transparent; color: #6f846e; padding: 2px 6px; font: 11px sans-serif; cursor: pointer; }
+      .tools { height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-bottom: 1px solid #edf0f4; background: #ffffff; padding: 0 8px; }
+      .tools button { border: 0; background: transparent; color: #929bab; padding: 2px 6px; font: 11px sans-serif; cursor: pointer; }
       iframe { flex: 1; min-height: 0; width: 100%; border: 0; }
-      .expand { display: none; width: 44px; height: 100%; border: 0; background: #285f4d; color: #fff; writing-mode: vertical-rl; font: 600 12px sans-serif; letter-spacing: 2px; cursor: pointer; }
+      .expand { display: none; width: 44px; height: 100%; border: 0; background: #375fa8; color: #fff; writing-mode: vertical-rl; font: 600 12px sans-serif; letter-spacing: 2px; cursor: pointer; }
       :host(.collapsed) .body, :host(.collapsed) .handle { display: none; }
       :host(.collapsed) .expand { display: block; }
       button:focus-visible { outline: 2px solid #288563; outline-offset: -2px; }

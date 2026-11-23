@@ -21,7 +21,23 @@ await worker.evaluate(async article=>{const tabs=await chrome.tabs.query({});con
 await page.waitForTimeout(1500);
 const frame=page.frames().find(f=>f.url().includes('reader.html'));
 if(!frame)throw new Error('Panel iframe absent '+page.frames().map(f=>f.url()));
-await frame.getByRole('button',{name:'현재 페이지 보내기',exact:true}).click();
+if(process.env.SCROLLFACT_UI_DIR) {
+  await fs.mkdir(process.env.SCROLLFACT_UI_DIR,{recursive:true});
+  await frame.locator('body').screenshot({path:join(process.env.SCROLLFACT_UI_DIR,'01-welcome.png')});
+  await frame.getByRole('button',{name:'ScrollFact란?'}).click();
+  await frame.locator('dialog').screenshot({path:join(process.env.SCROLLFACT_UI_DIR,'02-about.png')});
+  await frame.getByRole('button',{name:'닫기',exact:true}).click();
+}
+await frame.getByRole('button',{name:'설정',exact:true}).click();
+await frame.locator('#mode').selectOption('diagnostic');
+if(process.env.SCROLLFACT_TEST_API_URL) await frame.locator('#server').fill(process.env.SCROLLFACT_TEST_API_URL);
+if(process.env.SCROLLFACT_UI_DIR) {
+  await frame.getByRole('button',{name:'연결 확인',exact:true}).click();
+  await frame.getByText('API 키 또는 모델이 설정되지 않았어요',{exact:true}).waitFor();
+  await frame.locator('dialog').screenshot({path:join(process.env.SCROLLFACT_UI_DIR,'03-settings.png')});
+}
+await frame.getByRole('button',{name:'닫기',exact:true}).click();
+await frame.getByRole('button',{name:'이 페이지 분석하기',exact:true}).click();
 await frame.getByText(/서버 수신 완료/).waitFor({timeout:90000});
 console.log('STATUS',await frame.locator('.status').innerText());
 for(let i=1;i<=target;i++) {
