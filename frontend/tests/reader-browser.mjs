@@ -41,5 +41,23 @@ await panel.getByRole('button',{name:'현재 페이지 다시 보내기'}).click
 await panel.getByText('서버 수신 완료 · 3개 문단',{exact:true}).waitFor();
 await page.locator('#one').evaluate(el=>el.textContent='원문 내용이 변경되었습니다.');
 await panel.getByText('원문이 변경되었습니다. 현재 페이지를 다시 보내 주세요.',{exact:true}).waitFor();
+// Tight final paragraphs cannot all be centered at the bottom of a page.
+// Explicit navigation must win over the automatic 45%-of-viewport tracker.
+await page.locator('article').evaluate(el => {
+  el.innerHTML = '<div style="height:1300px"></div>' + Array.from({length:13}, (_,i) =>
+    `<p id="short-${i+1}" style="margin:0;height:24px;font-size:14px">짧은 문단 ${i+1}</p>`).join('');
+});
+const shortCapture = await page.evaluate(() => new Promise(resolve => window.sfHandler({type:'SF_CAPTURE_DOCUMENT'},resolve)));
+await page.evaluate(id => new Promise(resolve => window.sfHandler({type:'SF_WATCH_SECTIONS',snapshotId:id,
+  targets:Array.from({length:13},(_,i)=>({id:`short-${i+1}`,selector:`#short-${i+1}`}))},resolve)),shortCapture.snapshot.snapshotId);
+for (let attempt=0;attempt<2;attempt++) {
+  await page.evaluate(id => new Promise(resolve => window.sfHandler({type:'SF_SCROLL_TO_SECTION',snapshotId:id,sectionId:'short-11'},resolve)),shortCapture.snapshot.snapshotId);
+  await page.waitForTimeout(1000);
+  assert.equal(await page.locator('#short-11.scrollfact-active').count(),1);
+  assert.equal(await page.locator('.scrollfact-active').count(),1);
+}
+await page.mouse.move(200,400);
+await page.mouse.wheel(0,-100);
+await page.waitForFunction(() => !document.querySelector('#short-11').classList.contains('scrollfact-active') && document.querySelectorAll('.scrollfact-active').length===1);
 console.log('PASS: real HTTP gzip upload, 3 server passages, source navigation, scrubbed input/script text, stale text rejection, mutation invalidation. Chrome messaging bridged for test; not a loaded extension.');
 } finally {await browser.close()}

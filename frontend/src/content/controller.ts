@@ -27,6 +27,7 @@ export function mountContentController(host: ContentHost) {
   let panelOffset = 0
   let detachPanel: (() => void) | null = null
   let activeId: string | null = null
+  let selectedId: string | null = null
   let targets = new Map<string, HTMLElement>()
 
   const emit = host.emit
@@ -38,6 +39,18 @@ export function mountContentController(host: ContentHost) {
       element.classList.remove('scrollfact-active')
     targets = new Map()
     activeId = null
+    selectedId = null
+  }
+
+  function activate(id: string | null) {
+    activeId = id
+    for (const [key, element] of targets)
+      element.classList.toggle('scrollfact-active', key === id)
+    if (id && snapshot) emit({
+      type: MessageType.activeSectionChanged,
+      snapshotId: snapshot.snapshotId,
+      sectionId: id,
+    })
   }
 
   function resetSnapshot() {
@@ -138,6 +151,7 @@ export function mountContentController(host: ContentHost) {
       frame = 0
       checkLocation()
       if (!snapshot) return
+      if (selectedId && targets.get(selectedId)?.isConnected) return
       const middle = window.innerHeight * 0.45
       let bestId: string | null = null
       let bestDistance = Infinity
@@ -166,19 +180,22 @@ export function mountContentController(host: ContentHost) {
         }
       }
       if (bestId === activeId) return
-      activeId = bestId
-      for (const [id, element] of targets)
-        element.classList.toggle('scrollfact-active', id === bestId)
-      if (bestId)
-        emit({
-          type: MessageType.activeSectionChanged,
-          snapshotId: snapshot.snapshotId,
-          sectionId: bestId,
-        })
+      activate(bestId)
     }
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(updateActive)
     }
+    const resumeFollowing = (event: Event) => {
+      if (event.composedPath().some(node => node instanceof HTMLElement && node.id === 'scrollfact-root')) return
+      if (event instanceof KeyboardEvent) {
+        if (!['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return
+        if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable]')) return
+      }
+      selectedId = null
+      schedule()
+    }
+    for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
+      window.addEventListener(type, resumeFollowing, { capture: true, passive: true })
     const observer = new MutationObserver(() => {
       window.clearTimeout(mutationTimer)
       mutationTimer = window.setTimeout(() => {
@@ -213,6 +230,8 @@ export function mountContentController(host: ContentHost) {
     window.addEventListener('popstate', checkLocation)
     window.addEventListener('hashchange', checkLocation)
     stopWatch = () => {
+      for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
+        window.removeEventListener(type, resumeFollowing, true)
       observer.disconnect()
       window.clearTimeout(mutationTimer)
       window.cancelAnimationFrame(frame)
@@ -395,6 +414,8 @@ export function mountContentController(host: ContentHost) {
           sendResponse({ ok: false })
           return
         }
+        selectedId = String(message.sectionId)
+        activate(selectedId)
         element.scrollIntoView({
           block: 'center',
           behavior: matchMedia('(prefers-reduced-motion: reduce)').matches

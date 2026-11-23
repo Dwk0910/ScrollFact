@@ -12,7 +12,7 @@ public class HtmlParser {
     private static final Set<String> EXCLUDED = Set.of("script", "style", "noscript", "nav", "header", "footer", "aside", "iframe", "form");
     public ParsedPage parse(String html, String url) {
         var document = Jsoup.parse(html, url);
-        var scope = contentRoot(document, url);
+        var scope = contentRoot(document);
         var passages = new ArrayList<Passage>();
         var links = new LinkedHashSet<String>();
         int characters = 0;
@@ -44,12 +44,7 @@ public class HtmlParser {
         return new ParsedPage(List.copyOf(passages), List.copyOf(links));
     }
     // Scope extraction without cloning/removing nodes: source selectors must stay valid.
-    private Element contentRoot(org.jsoup.nodes.Document document, String url) {
-        String host = URI.create(url).getHost();
-        if (host != null && (host.equals("newspim.com") || host.endsWith(".newspim.com"))) {
-            var article = document.selectFirst("#news-contents");
-            if (article != null && contentSize(article) > 0) return article;
-        }
+    private Element contentRoot(org.jsoup.nodes.Document document) {
         for (String selector : List.of("[itemprop~=articleBody]", "article", "main, [role=main]")) {
             Element best = null;
             int size = 0;
@@ -75,9 +70,37 @@ public class HtmlParser {
         return size;
     }
 
+    // Repeated headline + publication-date rows describe a navigation feed, not
+    // prose. Require all signals together; ordinary lists and citations stay intact.
+    private boolean isDatedLinkList(Element element) {
+        if (!Set.of("ul", "ol").contains(element.normalName())) return false;
+        for (Element parent = element; parent != null; parent = parent.parent())
+            if (Set.of("doc-bibliography", "doc-endnotes", "doc-footnote").contains(parent.attr("role"))) return false;
+        var rows = element.children();
+        if (rows.size() < 3) return false;
+        var destinations = new HashSet<String>();
+        for (Element row : rows) {
+            if (!row.normalName().equals("li")) return false;
+            var anchors = row.select("a[href]");
+            if (anchors.size() != 1) return false;
+            var anchor = anchors.first();
+            String href = anchor.attr("href").trim();
+            if (href.startsWith("#") || !destinations.add(href)) return false;
+            int total = row.text().length();
+            if (total == 0 || anchor.text().length() < total * 0.55) return false;
+            boolean dated = !row.select("time[datetime]").isEmpty();
+            for (Element sibling : row.children()) {
+                if (sibling == anchor || !sibling.select("a").isEmpty()) continue;
+                if (sibling.text().matches("\\d{4}[.\\-/]\\d{1,2}[.\\-/]\\d{1,2}(?:\\s+\\d{1,2}:\\d{2})?")) dated = true;
+            }
+            if (!dated) return false;
+        }
+        return true;
+    }
+
     private boolean excluded(Element element) {
         for (Element e = element; e != null; e = e.parent()) {
-            if (EXCLUDED.contains(e.normalName()) || e.hasAttr("data-scrollfact-root") || e.id().equals("scrollfact-root") || e.hasAttr("hidden") || "true".equals(e.attr("aria-hidden"))) return true;
+            if (isDatedLinkList(e) || EXCLUDED.contains(e.normalName()) || e.hasAttr("data-scrollfact-root") || e.id().equals("scrollfact-root") || e.hasAttr("hidden") || "true".equals(e.attr("aria-hidden"))) return true;
         }
         return false;
     }
