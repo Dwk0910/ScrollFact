@@ -1,5 +1,13 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 Gemini 503 제한 재시도
+
+오류 0080d266-e0a4-48db-9f05-b34b3898c248은 gemini-3.5-flash-lite 생성 요청의 HTTP503/UNAVAILABLE이다. 이전 신규 사용자 모델 접근 제한 404와 구분하며, 로그만으로 Google 전체 장애나 과부하의 세부 원인을 확정할 수 없다.
+
+Gemini 본문 분석에서 명시적인 503 응답만 최대 3회(최초 + 재시도 2회) 요청한다. 대기는 1초/2초 + 0~250ms 지터이며 취소 인터럽트를 전달한다. 통신 예외·다른 HTTP 오류·형식 오류는 재시도하지 않는다. 설정의 연결 검사/목록 조회는 이번 재시도 대상이 아니다. 최종 오류는 PROVIDER_UNAVAILABLE, 총 시도 횟수·UUID를 표시하고 재시도 로그와 같은 UUID로 연결한다. 키·본문·제공자 자유 텍스트는 기록하지 않으며 모델 자동 전환 없음.
+
+검증: 로컬 HTTP 503→200 분석 성공, 지속 503의 3회 종료, 다른 상태/통신 예외 비재시도, 대기 중 취소 테스트와 backend:test/bootJar 통과. Google 실제 서비스 회복 여부는 이번 작업에서 재호출하지 않았다. 적용하려면 실행 중 백엔드를 재시작한다. 확장 재빌드와 키 재입력은 필요 없다.
+
 ## 2026-11-24 Gemini 404 원인 확정 및 실제 호출 성공
 
 사용자가 최신 서버를 재시작하고 키/모델을 저장한 뒤 같은 키로 직접 검증했다. gemini-2.5-flash-lite의 GET 모델 조회는 HTTP200/지원 메서드 generateContent를 반환하지만 POST 생성은 HTTP404를 반환했다. Google 실제 오류는 “no longer available to new users”이며 대체 모델 models/gemini-3.5-flash-lite를 명시했다. 공식 2.5 Flash-Lite 문서도 과거 사용 이력 사용자로 접근 제한을 설명한다. https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite

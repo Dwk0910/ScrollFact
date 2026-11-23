@@ -12,8 +12,11 @@ final class ProviderFailure {
         return new ApiFailure(502, "provider_transport", provider + " " + kind + " · 통신에 실패했습니다. (오류 번호 " + id + ")");
     }
     static ApiFailure response(String provider, String model, int http, byte[] body) {
+        return response(provider, model, http, body, 1, UUID.randomUUID().toString());
+    }
+    static ApiFailure response(String provider, String model, int http, byte[] body, int attempts, String id) {
         String status = "UNKNOWN";
-        String classification = "HTTP_ERROR";
+        String classification = http == 503 ? "PROVIDER_UNAVAILABLE" : "HTTP_ERROR";
         String replacement = "";
         try {
             var error = new ObjectMapper().readTree(body).path("error");
@@ -30,13 +33,14 @@ final class ProviderFailure {
             case 400 -> "요청 형식 또는 API 키를 확인해 주세요.";
             case 401, 403 -> "API 키 인증 또는 권한이 거부됐습니다.";
             case 404 -> "해당 모델이나 API 경로를 찾지 못했습니다. 모델 목록에서 다시 선택해 주세요.";
+            case 503 -> "제공자가 일시적으로 요청을 처리하지 못했습니다. 잠시 후 다시 분석해 주세요.";
             case 429 -> "사용량 또는 요청 한도에 도달했습니다.";
             default -> "제공자 요청에 실패했습니다.";
         };
         if (classification.equals("MODEL_UNAVAILABLE_TO_NEW_USERS")) reason = "선택한 모델은 신규 사용자에게 제공되지 않습니다." + (replacement.isEmpty() ? " 다른 모델을 선택해 주세요." : " Google 권장 대체 모델: " + replacement + ". 설정에서 변경해 주세요.");
-        String id = UUID.randomUUID().toString();
+        if (attempts > 1) reason += " 총 " + attempts + "회 시도했습니다.";
         // Only allowlisted metadata: never log upstream free text, keys, or article contents.
-        LoggerFactory.getLogger(ProviderFailure.class).warn("AI error id={} provider={} model={} http={} status={} reason={} suggestedModel={}", id, provider, model, http, status, classification, replacement);
+        LoggerFactory.getLogger(ProviderFailure.class).warn("AI error id={} provider={} model={} http={} status={} reason={} suggestedModel={} attempts={}", id, provider, model, http, status, classification, replacement, attempts);
         return new ApiFailure(502, "provider_failed", provider + " HTTP " + http + " · " + status + ": " + reason + " (오류 번호 " + id + ")");
     }
 }

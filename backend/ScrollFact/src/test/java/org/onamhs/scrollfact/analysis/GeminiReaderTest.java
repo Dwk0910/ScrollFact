@@ -23,6 +23,7 @@ class GeminiReaderTest {
     @Test void geminiRequestValidatesOutputAndHandlesIncompleteBlockedAndQuotaErrors() throws Exception {
         var received = new AtomicReference<String>(); var auth = new AtomicReference<String>();
         var httpStatus = new AtomicInteger(200);
+        var attempts = new AtomicInteger();
         var output = new AtomicReference<>(mapper.writeValueAsString(Map.of("candidates",
             List.of(Map.of("finishReason", "STOP", "content", Map.of("parts", List.of(Map.of("text", mapper.writeValueAsString(valid())))))),
             "usageMetadata", Map.of("promptTokenCount", 123, "candidatesTokenCount", 40, "thoughtsTokenCount", 5))));
@@ -31,11 +32,12 @@ class GeminiReaderTest {
             received.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             auth.set(exchange.getRequestHeaders().getFirst("x-goog-api-key"));
             byte[] bytes = output.get().getBytes(StandardCharsets.UTF_8);
-            exchange.sendResponseHeaders(httpStatus.get(), bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
+            exchange.sendResponseHeaders(attempts.incrementAndGet() == 1 ? 503 : httpStatus.get(), bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
         }); server.start();
         try {
             var reader = new GeminiReader("test-secret", "test-model", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/responses"), mapper);
             var result = reader.analyze(input);
+            assertThat(attempts.get()).isEqualTo(2);
             assertThat(result.inputTokens()).isEqualTo(123); assertThat(result.outputTokens()).isEqualTo(45);
             var request = mapper.readTree(received.get());
             assertThat(request.at("/generationConfig/responseMimeType").asText()).isEqualTo("application/json");

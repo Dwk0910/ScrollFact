@@ -51,7 +51,7 @@ public class GeminiReader {
             .header("x-goog-api-key", key).header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body))).build();
         HttpResponse<byte[]> response;
-        try { response = client.send(request, info -> new LimitedBodySubscriber(2 * 1024 * 1024)); }
+        try { response = GeminiRetry.send(model, () -> client.send(request, info -> new LimitedBodySubscriber(2 * 1024 * 1024))); }
         catch (java.io.IOException e) { throw ProviderFailure.transport("Gemini", model, e); }
         if (response.statusCode() != 200) throw ProviderFailure.response("Gemini", model, response.statusCode(), response.body());
         var envelope = mapper.readTree(response.body());
