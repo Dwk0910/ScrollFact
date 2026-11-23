@@ -9,24 +9,25 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class HtmlParser {
-    private static final Set<String> EXCLUDED = Set.of("script", "style", "noscript", "nav", "header", "footer", "aside", "iframe");
+    private static final Set<String> EXCLUDED = Set.of("script", "style", "noscript", "nav", "header", "footer", "aside", "iframe", "form");
     public ParsedPage parse(String html, String url) {
         var document = Jsoup.parse(html, url);
+        var scope = contentRoot(document, url);
         var passages = new ArrayList<Passage>();
         var links = new LinkedHashSet<String>();
         int characters = 0;
         // Never mutate the DOM before deriving selectors: nth-of-type must match the source.
-        for (var element : document.select("p, li, blockquote")) {
+        for (var element : scope.select("p, li, blockquote")) {
             if (excluded(element) || element.children().stream().anyMatch(e -> !e.select("p, li, blockquote").isEmpty())) continue;
             String text = element.text().trim();
             if (text.isEmpty()) continue;
             characters += text.length();
             if (passages.size() >= 200 || characters > 200_000)
-                throw new ApiFailure(422, "document_too_complex", "문단 200개 또는 본문 20만 자 상한을 초과했습니다. 일부만 분석하지 않습니다.");
+                throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
             passages.add(new Passage("section-" + (passages.size() + 1), selector(element), text));
         }
         if (passages.isEmpty()) throw new ApiFailure(422, "no_passages", "분석할 문단을 찾지 못했습니다.");
-        for (var link : document.select("a[href]")) {
+        for (var link : scope.select("a[href]")) {
             if (excluded(link)) continue;
             try {
                 URI uri = URI.create(link.absUrl("href")).normalize();
@@ -42,6 +43,38 @@ public class HtmlParser {
         }
         return new ParsedPage(List.copyOf(passages), List.copyOf(links));
     }
+    // Scope extraction without cloning/removing nodes: source selectors must stay valid.
+    private Element contentRoot(org.jsoup.nodes.Document document, String url) {
+        String host = URI.create(url).getHost();
+        if (host != null && (host.equals("newspim.com") || host.endsWith(".newspim.com"))) {
+            var article = document.selectFirst("#news-contents");
+            if (article != null && contentSize(article) > 0) return article;
+        }
+        for (String selector : List.of("[itemprop~=articleBody]", "article", "main, [role=main]")) {
+            Element best = null;
+            int size = 0;
+            for (Element candidate : document.select(selector)) {
+                if (excluded(candidate)) continue;
+                int candidateSize = contentSize(candidate);
+                if (candidateSize > size) { best = candidate; size = candidateSize; }
+            }
+            if (best != null) return best;
+        }
+        // Plain documents may have no semantic container. Preserve the existing limits
+        // rather than silently taking the first 200 items or dropping long paragraphs.
+        return document.body();
+    }
+
+    private int contentSize(Element root) {
+        int size = 0;
+        for (Element paragraph : root.select("p, li, blockquote")) {
+            if (excluded(paragraph) || paragraph.children().stream().anyMatch(e -> !e.select("p, li, blockquote").isEmpty())) continue;
+            int linked = paragraph.select("a").stream().mapToInt(a -> a.text().length()).sum();
+            size += Math.max(0, paragraph.text().length() - linked);
+        }
+        return size;
+    }
+
     private boolean excluded(Element element) {
         for (Element e = element; e != null; e = e.parent()) {
             if (EXCLUDED.contains(e.normalName()) || e.hasAttr("data-scrollfact-root") || e.id().equals("scrollfact-root") || e.hasAttr("hidden") || "true".equals(e.attr("aria-hidden"))) return true;
