@@ -1,5 +1,13 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 설정 내 모델 목록과 오류 기록
+
+사용자가 Gemini 실패 원인 및 설정 내 키/모델 선택을 요청했다. 당시 실행 중 서버의 status는 모델 `gravity`였으며, 사용자는 화면의 Antigravity 표시명을 제시했다. 공식 자료에서 이를 generateContent 모델 ID로 확인하지 못했다. 기존 구현이 HTTP 상태/응답을 폐기해 당시 실패의 정확한 HTTP 원인은 복원 불가다. 표시명으로 ID를 추측하지 않는다.
+
+설정 → AI 연결에서 제공자/API 키 입력 → 목록 조회 → 모델 드롭다운 선택 → 적용을 구현했다. `/v1/reader/models`, `/configuration` JSON POST는 로컬 접속만 허용한다. 서버는 고정된 제공자 주소에서 목록을 조회하고 모델 ID를 재검증한 뒤 실행 중 설정을 교체한다. Gemini는 generateContent 지원 모델, OpenAI는 반환된 모델 목록이며 구조화 출력/과금 한도까지 보장하지 않는다. 키는 서버 메모리만 유지, 클라이언트 저장소/DB/파일 저장 없음, 적용 뒤 입력칸 초기화. 서버 재시작 시 환경변수로 복귀하므로 재설정 필요.
+
+Gemini HTTP 오류는 상태/모델/Google 상태 enum/UUID, 통신 오류는 종류/UUID를 기록한다. 자유 형식 제공자 본문·키·본문은 로그 제외. `logs/scrollfact.log`(서버 작업 디렉터리 기준), 최대 5MB 회전/7일, git 제외. 화면 오류 번호로 추적한다. 신규 백엔드 검사와 프론트 lint/build/check:extension 통과, Whale에서 모델 목록·선택·적용·키 초기화·저장소 미보관 확인(스텁 API). 실제 제공자 목록 조회·생성 성공은 미검증. 기존 사용자 서버는 자동 종료하지 않았으므로 재시작과 확장 새로고침이 필요하다.
+
 ## 2026-11-24 Gemini 제공자 추가
 
 사용자 요청으로 Google Gemini API를 추가했다. 서버 `SCROLLFACT_AI_PROVIDER=openai|gemini`로 선택하며 기본값은 openai다. Gemini는 `GEMINI_API_KEY`, `SCROLLFACT_GEMINI_MODEL`이 필요하다. `scripts/start-gemini-server.sh` / `.ps1`이 키·모델 입력과 제공자 선택을 처리한다. 브라우저는 키를 저장하지 않으며 연결 확인 시 실제 제공자와 모델을 표시한다. 실행 문서는 `docs/development/openai-reader.md`에 통합했다.

@@ -64,3 +64,9 @@ OpenAI HTTP 계약 테스트는 로컬 가짜 제공자 서버로 수행한다. 
 설정 디자인 참고: [TDS ListRow](https://tossmini-docs.toss.im/tds-mobile/components/ListRow/list-row-components/), [Apple Settings](https://developer.apple.com/design/human-interface-guidelines/settings), [Apple Lists](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables). 라이브러리 의존성을 추가하지 않고 행 구성·계층 탐색 패턴을 참고했다.
 
 설정 브라우저 검사: dist를 4174에서 제공한 뒤 `node frontend/tests/reader-settings.mjs`. 필요시 `SCROLLFACT_PLAYWRIGHT_MODULE`, `SCROLLFACT_BROWSER_PATH`, `SCROLLFACT_PREVIEW_URL`, `SCROLLFACT_UI_DIR`로 환경을 지정한다. 서버 상태 API는 스텁이며 실제 AI 호출 검사가 아니다.
+
+## 설정 화면에서 연결 (최신)
+
+서버 실행 후 확장 설정 → AI 연결에서 제공자·API 키를 입력하고 **모델 목록 불러오기 → 모델 선택 → 연결 적용**한다. 서버가 제공자의 모델 목록 API를 조회하고 선택한 ID가 목록에 있는지 다시 확인한 뒤 원자적으로 적용한다. 생성 요청은 수행하지 않으므로 모델 목록 확인만으로 구조화 출력 지원·과금·한도를 보장하지 않는다. API 키는 입력 중 React 메모리에만 있으며 적용 시 지우고, 서버 메모리에만 유지한다. 서버 재시작 시 UI 설정은 사라지고 환경변수 설정으로 돌아간다. 브라우저 저장소나 DB에 키를 보관하지 않는다. 키 설정 API는 로컬 접속만 허용한다. 기존 환경변수와 시작 스크립트도 계속 지원한다.
+
+Gemini HTTP 실패는 HTTP 상태·Google 상태 코드·모델 ID·오류 UUID를 기록한다. 화면의 오류 번호로 서버 작업 디렉터리의 `logs/scrollfact.log`에서 찾을 수 있다. 제공자 자유 형식 오류 본문·기사·키는 기록하지 않는다. `SCROLLFACT_LOG_FILE`로 위치를 바꿀 수 있다. 기존 버전이 버린 오류 원문은 소급 복원할 수 없다.

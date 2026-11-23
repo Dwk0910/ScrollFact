@@ -17,9 +17,16 @@ public class ActiveReader {
             throw new IllegalArgumentException("SCROLLFACT_AI_PROVIDER must be openai or gemini");
         this.openai = openai; this.gemini = gemini;
     }
-    public boolean configured() { return provider.equals("gemini") ? gemini.configured() : openai.configured(); }
-    public Map<String, Object> status() { return provider.equals("gemini") ? gemini.status() : openai.status(); }
+    private record Override(OpenAiReader openai, GeminiReader gemini) {}
+    private volatile Override override;
+    public synchronized void configure(String provider, String key, String model) {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        override = provider.equals("gemini") ? new Override(null, new GeminiReader(key, model, mapper))
+            : new Override(new OpenAiReader(key, model, mapper), null);
+    }
+    public boolean configured() { var o = override; return o != null ? (o.gemini() != null ? o.gemini().configured() : o.openai().configured()) : provider.equals("gemini") ? gemini.configured() : openai.configured(); }
+    public Map<String, Object> status() { var o = override; return o != null ? (o.gemini() != null ? o.gemini().status() : o.openai().status()) : provider.equals("gemini") ? gemini.status() : openai.status(); }
     public Completion analyze(EvaluationInput input) throws Exception {
-        return provider.equals("gemini") ? gemini.analyze(input) : openai.analyze(input);
+        var o = override; return o != null ? (o.gemini() != null ? o.gemini().analyze(input) : o.openai().analyze(input)) : provider.equals("gemini") ? gemini.analyze(input) : openai.analyze(input);
     }
 }

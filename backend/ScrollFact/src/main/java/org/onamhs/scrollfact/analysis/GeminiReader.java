@@ -50,15 +50,10 @@ public class GeminiReader {
         var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(180))
             .header("x-goog-api-key", key).header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body))).build();
-        var response = client.send(request, info -> new LimitedBodySubscriber(2 * 1024 * 1024));
-        if (response.statusCode() != 200) {
-            String detail = switch(response.statusCode()) {
-                case 401, 403 -> "Gemini 인증에 실패했습니다. 서버 API 키와 권한을 확인해 주세요.";
-                case 429 -> "Gemini 사용 한도 또는 요청 한도에 도달했습니다. API 사용량을 확인해 주세요.";
-                default -> "Gemini 요청이 실패했습니다. 서버의 모델 설정과 연결을 확인해 주세요.";
-            };
-            throw new ApiFailure(502, "gemini_failed", detail);
-        }
+        HttpResponse<byte[]> response;
+        try { response = client.send(request, info -> new LimitedBodySubscriber(2 * 1024 * 1024)); }
+        catch (java.io.IOException e) { throw ProviderFailure.transport("Gemini", model, e); }
+        if (response.statusCode() != 200) throw ProviderFailure.response("Gemini", model, response.statusCode(), response.body());
         var envelope = mapper.readTree(response.body());
         var candidate = envelope.path("candidates").path(0);
         if (!"STOP".equals(candidate.path("finishReason").asText()))

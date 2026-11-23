@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import AiConnection from './AiConnection'
 import { ChevronLeft, ChevronRight, X, Cpu, SlidersHorizontal, AlignLeft, Check } from 'lucide-react'
 
 type Preferences = { server: string; follow: boolean; mode: 'reader' | 'diagnostic' }
@@ -32,9 +33,9 @@ export default function SettingsPanel({ preferences, change, busy, checking, con
         <Row icon={<AlignLeft size={17} />} title="읽기 동작" value={preferences.follow ? '자동 따라가기' : '수동 이동'} onClick={() => setPage('reading')} />
         <Row icon={<SlidersHorizontal size={17} />} title="고급 설정" value={preferences.mode === 'reader' ? 'AI 분석' : '전송 점검'} onClick={() => setPage('advanced')} />
       </div><p className="settings-footnote">읽기 설정은 이 브라우저에 저장돼요.</p></>}
-      {page === 'ai' && <><p className="settings-section-label">연결된 AI</p><div className="settings-group"><div className="settings-info-row"><span>지원 제공자</span><span>OpenAI · Gemini</span></div><div className="settings-info-row"><span>연결 방식</span><span>서버 API 키</span></div><button className="settings-action-row" onClick={() => void checkConnection()} disabled={checking}>{checking ? '확인 중…' : '연결 확인'}<ChevronRight size={15} /></button></div><p className="settings-footnote connection-status" role="status">{connection}</p>
+      {page === 'ai' && <><AiConnection server={preferences.server} disabled={busy} saved={checkConnection} /><p className="settings-section-label">연결된 AI</p><div className="settings-group"><div className="settings-info-row"><span>지원 제공자</span><span>OpenAI · Gemini</span></div><div className="settings-info-row"><span>연결 방식</span><span>서버 API 키</span></div><button className="settings-action-row" onClick={() => void checkConnection()} disabled={checking}>{checking ? '확인 중…' : '연결 확인'}<ChevronRight size={15} /></button></div><p className="settings-footnote connection-status" role="status">{connection}</p>
         <p className="settings-footnote">연결 확인은 서버 설정 유무를 확인해요. 실제 API 인증은 분석할 때 진행돼요.</p>
-        <details className="settings-guide"><summary>제공자와 API 키 설정 방법</summary><p>서버를 시작할 때 제공자를 선택해요. 키는 브라우저에 저장하지 않아요.</p><p>Gemini: <code>scripts/start-gemini-server.sh</code><br />OpenAI: <code>scripts/start-openai-server.sh</code></p><p>Windows에서는 같은 이름의 <code>.ps1</code> 파일을 실행해 주세요. 제공자를 바꾼 뒤에는 서버를 다시 시작해 주세요.</p></details>
+
       </>}
       {page === 'reading' && <><p className="settings-section-label">문단 이동</p><div className="settings-group"><label className="settings-toggle-row"><span>원문 스크롤 따라가기</span><input className="switch" type="checkbox" role="switch" checked={preferences.follow} onChange={e => change({ follow: e.target.checked })} /></label></div><p className="settings-footnote">원문을 스크롤하면 현재 읽는 문단의 분석으로 전환해요. 끄면 이전·다음 버튼으로 이동해요.</p></>}
       {page === 'advanced' && <><p className="settings-section-label">실행 모드</p><div className="settings-group settings-radio-group" role="radiogroup" aria-label="실행 모드">

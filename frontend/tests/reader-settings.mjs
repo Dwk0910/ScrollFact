@@ -24,7 +24,16 @@ try {
  await page.getByRole('button',{name:'설정으로 돌아가기'}).click();
  await page.getByRole('button',{name:/AI 연결/}).click();await page.getByRole('button',{name:'연결 확인',exact:true}).click();
  await page.getByText('API 키 또는 모델이 설정되지 않았어요',{exact:true}).waitFor();
+ await page.route('**/v1/reader/models', r=>r.fulfill({json:[{id:'gemini-test',name:'Gemini test model'}]}));
+ await page.route('**/v1/reader/configuration', r=>{const body=r.request().postDataJSON();assert.equal(body.model,'gemini-test');assert.equal(body.apiKey,'fixture-key');return r.fulfill({json:{configured:true}})});
+ await page.getByLabel('API 키',{exact:true}).fill('fixture-key');
+ await page.getByRole('button',{name:'모델 목록 불러오기',exact:true}).click();
+ await page.getByLabel('모델',{exact:true}).selectOption('gemini-test');
  await page.screenshot({path:dir+'/03-ai.png'});
+ await page.getByRole('button',{name:'연결 적용',exact:true}).click();
+ await page.getByText('서버에 적용했어요. 바로 분석할 수 있어요.',{exact:true}).waitFor();
+ assert.equal(await page.getByLabel('API 키',{exact:true}).inputValue(),'');
+ assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes('fixture-key')),false);
  await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(e=>e.open),false);
  await page.reload();await page.getByRole('button',{name:'설정',exact:true}).click();await page.getByRole('button',{name:/읽기 동작/}).click();assert.equal(await page.getByRole('switch').isChecked(),false);
  await page.getByRole('button',{name:'설정으로 돌아가기'}).click();await page.getByRole('button',{name:/고급 설정/}).click();assert.equal(await page.getByRole('radio',{name:'페이지 전송 점검',exact:true}).isChecked(),true);assert.equal(await page.locator('#server').inputValue(),'http://127.0.0.1:8082');

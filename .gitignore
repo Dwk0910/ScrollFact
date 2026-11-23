@@ -28,3 +28,6 @@ out/
 /tmp/
 __pycache__/
 *.pyc
+
+# Local server diagnostics
+**/logs/
