@@ -1,3 +1,4 @@
+import { serializeUpload } from './snapshot'
 import {
   isRecord,
   MAX_HTML_BYTES,
@@ -54,7 +55,7 @@ export function mountContentController(host: ContentHost) {
 
   function captureDocument(): DocumentSnapshot {
     resetSnapshot()
-    const html = document.documentElement.outerHTML
+    const html = serializeUpload(document)
     if (new Blob([html]).size > MAX_HTML_BYTES)
       throw new Error('페이지 HTML이 20 MiB를 초과해 분석할 수 없습니다.')
     snapshot = { snapshotId: crypto.randomUUID(), url: location.href }
@@ -101,7 +102,7 @@ export function mountContentController(host: ContentHost) {
     checkLocation()
     if (!snapshot || snapshot.snapshotId !== snapshotId || !Array.isArray(value))
       return { ok: false }
-    const specs: { id: string; selector: string }[] = []
+    const specs: { id: string; selector: string; text?: string }[] = []
     const ids = new Set<string>()
     for (const item of value) {
       if (
@@ -114,7 +115,7 @@ export function mountContentController(host: ContentHost) {
       )
         return { ok: false }
       ids.add(item.id)
-      specs.push({ id: item.id, selector: item.selector })
+      specs.push({ id: item.id, selector: item.selector, text: typeof item.text === 'string' ? item.text : undefined })
     }
     clearWatch()
     const unmatchedIds: string[] = []
@@ -122,7 +123,7 @@ export function mountContentController(host: ContentHost) {
     const matchedElements = new Set<HTMLElement>()
     for (const spec of specs) {
       const element = matchElement(spec.selector)
-      if (!element || matchedElements.has(element)) {
+      if (!element || matchedElements.has(element) || (spec.text !== undefined && (element.textContent ?? '').replace(/\s+/g, ' ').trim() !== spec.text.replace(/\s+/g, ' ').trim())) {
         unmatchedIds.push(spec.id)
         continue
       }

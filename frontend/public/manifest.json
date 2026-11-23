@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ScrollFact",
-  "description": "페이지 전체의 신뢰도와 문단별 분석 근거를 스크롤에 맞춰 보여줍니다.",
+  "description": "글 전체의 의견과 현재 문단의 맥락을 원문 옆에서 함께 읽습니다.",
   "version": "0.2.0",
   "minimum_chrome_version": "116",
   "action": {
@@ -34,7 +34,8 @@
     {
       "resources": [
         "src/sidepanel/index.html",
-        "deductions.html"
+        "deductions.html",
+        "reader.html"
       ],
       "matches": [
         "http://*/*",

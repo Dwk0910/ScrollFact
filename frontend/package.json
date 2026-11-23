@@ -12,7 +12,8 @@
     "test:api": "node --test tests/api.test.mjs",
     "test:live": "node tests/live-api.mjs",
     "preview": "vite preview",
-    "build:deductions": "tsc -b && vite build --mode deductions && node scripts/check-extension-build.mjs dist-deductions"
+    "build:deductions": "tsc -b && vite build --mode deductions && node scripts/check-extension-build.mjs dist-deductions",
+    "test:reader": "node tests/reader-browser.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -3,7 +3,7 @@ import { mountContentController } from './controller'
 const key = 'scrollfactPanel'
 mountContentController({
   panelUrl: chrome.runtime.getURL(import.meta.env.VITE_DEDUCTION_EXTENSION
-    ? 'deductions.html?extension=1' : 'src/sidepanel/index.html'),
+    ? 'deductions.html?extension=1' : 'reader.html'),
   emit: message => { chrome.runtime.sendMessage(message, () => { void chrome.runtime.lastError }) },
   listen: handler => {
     const listener = (message: unknown, _sender: chrome.runtime.MessageSender, respond: (value: unknown) => void) => handler(message, respond)

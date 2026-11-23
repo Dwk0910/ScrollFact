@@ -31,6 +31,7 @@ export default defineConfig(({ command, mode }) => ({
         preview: 'index.html',
         coaching: 'coaching.html',
         festival: 'festival.html',
+        reader: 'reader.html',
         firstEdition: 'first-edition.html',
         deductions: 'deductions.html',
         deductionSite: 'deduction-site.html',
