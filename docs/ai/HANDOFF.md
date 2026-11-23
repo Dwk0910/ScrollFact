@@ -1,5 +1,13 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 Gemini 404 원인 확정 및 실제 호출 성공
+
+사용자가 최신 서버를 재시작하고 키/모델을 저장한 뒤 같은 키로 직접 검증했다. gemini-2.5-flash-lite의 GET 모델 조회는 HTTP200/지원 메서드 generateContent를 반환하지만 POST 생성은 HTTP404를 반환했다. Google 실제 오류는 “no longer available to new users”이며 대체 모델 models/gemini-3.5-flash-lite를 명시했다. 공식 2.5 Flash-Lite 문서도 과거 사용 이력 사용자로 접근 제한을 설명한다. https://ai.google.dev/gemini-api/docs/models/gemini-2.5-flash-lite
+
+같은 키로 gemini-3.5-flash-lite 모델 조회 및 짧은 JSON 생성이 HTTP200으로 성공했다. 기존 로컬 configuration API의 저장 키 재사용으로 활성 계정의 모델을 gemini-3.5-flash-lite로 변경했다. 이후 2문단 합성 기사를 실제 upload→AI→검증→결과 API로 분석해 completed 확인(입력677/출력421토큰, 문단2/관점1). 이는 실제 AI 연결 성공이며 분석 정확성 전반이나 모든 기사 동작 보장은 아니다. 키/암호문은 출력·파일 저장하지 않았다.
+
+재발 방지: Gemini 연결 적용 시 짧은 JSON 생성 검사를 선행하고 실패하면 기존 프로필 설정을 유지한다. 목록 조회 성공을 실제 생성 권한으로 간주하지 않는다. UI에 소량의 API 사용량 발생을 명시했다. 신규 사용자 차단 오류는 고정된 분류와 Google 제안 모델 ID만 안전하게 추출해 화면·로그에 표시한다. 자동으로 다른 모델을 호출하지 않는다. 404 회귀/기존 설정 보존 테스트 및 backend:test/bootJar, frontend lint/build/check:extension 통과. 현재 서버 모델 변경은 즉시 적용됐고 재발 방지 코드 변경은 다음 서버 재시작 시 적용된다.
+
 ## 2026-11-24 ID 로컬 계정과 OS 보호 API 키 저장
 
 사용자는 ID만으로 로그인하는 계정 틀과 서버 재시작 후 유지되는 키/설정을 요청했다. 설정의 계정 화면에서 ID 생성/로그인/전환/로그아웃을 지원한다. 이는 로컬 프로필이며 인증이나 타인 접근 방지가 아니다. 동일 서버의 모든 탭이 활성 계정을 공유한다. 외부 다중 사용자용 계정 시스템으로 취급하지 않는다.

@@ -29,6 +29,7 @@ public class ReaderSettingsController {
         String key = profiles.key(config.profileId(), config.provider(), config.apiKey());
         var models = catalog.list(config.provider(), key);
         if (models.stream().noneMatch(m -> m.id().equals(config.model()))) throw new ApiFailure(400, "unknown_model", "모델 목록에서 사용할 모델을 선택해 주세요.");
+        catalog.verify(config.provider(), key, config.model());
         profiles.save(config.profileId(), config.provider(), key, config.model());
         return status();
     }

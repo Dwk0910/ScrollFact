@@ -20,7 +20,7 @@ export default function AiConnection({ server, disabled, saved, profile, updateP
     try {
       const url = new URL(server)
       if (!['http:', 'https:'].includes(url.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.search || url.hash) throw new Error('API 키 설정은 로컬 서버 주소에서만 사용할 수 있어요.')
-      const response = await fetch(`${url.href.replace(/\/$/, '')}/v1/reader/${save ? 'configuration' : 'models'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, apiKey: key, model, profileId: profile?.id }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]) })
+      const response = await fetch(`${url.href.replace(/\/$/, '')}/v1/reader/${save ? 'configuration' : 'models'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, apiKey: key, model, profileId: profile?.id }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(90000)]) })
       const data: unknown = await response.json()
       if (!response.ok) throw new Error(isRecord(data) && typeof data.detail === 'string' ? data.detail : '연결 요청이 실패했어요.')
       if (controller.signal.aborted) return
@@ -47,5 +47,5 @@ export default function AiConnection({ server, disabled, saved, profile, updateP
     {profile.model && <p className="caption">현재 저장된 모델 · {profile.model}</p>}
     <button disabled={disabled || pending || !model || (!key && !hasStored)} onClick={() => void request(true)}>연결 적용</button>
   {hasStored && <button disabled={disabled || pending} onClick={() => void forget()}>저장된 키 삭제</button>}
-  </div><p className="settings-footnote" role="status">{message}</p><p className="settings-footnote">목록은 제공자가 반환한 모델이에요. 구조화 분석 지원과 사용 한도는 실제 분석 시 확인돼요. 키는 운영체제 보안 저장소로 보호해 저장해요. 같은 컴퓨터·OS 계정에서 서버를 다시 시작해도 유지돼요. 브라우저에는 키를 저장하지 않아요.</p></>
+  </div><p className="settings-footnote" role="status">{message}</p><p className="settings-footnote">목록은 제공자가 반환한 모델이에요. Gemini 연결 적용 시 짧은 JSON 생성 요청으로 호출 가능 여부를 확인해요. 소량의 API 사용량이 발생하며, 실패하면 기존 설정을 유지해요. 전체 분석 품질은 별도로 확인해야 해요. 키는 운영체제 보안 저장소로 보호해 저장해요. 같은 컴퓨터·OS 계정에서 서버를 다시 시작해도 유지돼요. 브라우저에는 키를 저장하지 않아요.</p></>
 }

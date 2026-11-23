@@ -23,7 +23,7 @@ public class GeminiReader {
                         @Value("${scrollfact.gemini.model:}") String model, ObjectMapper mapper) {
         this(key, model, endpoint(model), mapper);
     }
-    private static URI endpoint(String model) {
+    static URI endpoint(String model) {
         if (!model.isBlank() && !model.matches("[A-Za-z0-9._-]+"))
             throw new IllegalArgumentException("SCROLLFACT_GEMINI_MODEL must be a model ID without a path");
         return URI.create("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent");
