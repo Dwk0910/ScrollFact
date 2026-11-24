@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';import fs from 'node:fs/promises';
 const {chromium}=await import(process.env.SCROLLFACT_PLAYWRIGHT_MODULE||'playwright');
 const result=JSON.parse(await fs.readFile(process.env.SCROLLFACT_RESULT,'utf8'));
+result.perspectives=[{label:'관점 A (검증용)',entries:result.comments.slice(0,3).map(c=>({blockId:c.id,quote:c.text,reason:'원문 기반 분류 경로 검증용'}))},{label:'관점 B (검증용)',entries:result.comments.slice(3).map(c=>({blockId:c.id,quote:c.text,reason:'원문 기반 분류 경로 검증용'}))}].filter(g=>g.entries.length);
 const browser=await chromium.launch({executablePath:process.env.SCROLLFACT_BROWSER_PATH,headless:true});
 try {
  const page=await browser.newPage({viewport:{width:440,height:900},deviceScaleFactor:2});
@@ -24,11 +25,21 @@ try {
  const watched=await page.evaluate(()=>window.lastMessage);
  assert.equal(watched.type,'SF_WATCH_SECTIONS');
  assert.equal(watched.targets.length,result.passages.length+result.comments.length+result.images.length);
- await page.locator('.collected-comments>summary').click();
- assert.equal(await page.locator('.collected-comments .opinion-entry').count(),result.comments.length);
- await page.locator('.collected-comments .source-link').first().click();
+ assert.equal(await page.locator('.collected-comments').count(),0);
+ assert.equal(await page.locator('.opinion-gauge>span').count(),result.perspectives.length);
+ for(const summary of await page.locator('.opinions .perspective>summary').all()) await summary.click();
+ assert.equal(await page.locator('.opinions .opinion-entry').count(),result.comments.length);
+ await page.locator('.opinions .source-link').first().click();
  assert.equal((await page.evaluate(()=>window.lastMessage)).sectionId,result.comments[0].id);
- await page.locator('.collected-comments>summary').click();
+ await page.locator('.opinions').screenshot({path:dir+'/comment-gauge.png'});
+ result.perspectives=[{label:'한 관점 (검증용)',entries:result.comments.map(c=>({blockId:c.id,quote:c.text,reason:'동일 관점 검증용'}))}];
+ await page.getByRole('button',{name:'다시 분석',exact:true}).click();
+ await page.getByText('한 관점 (검증용)',{exact:false}).waitFor();
+ assert.equal(await page.locator('.opinion-gauge>span').count(),1);
+ result.perspectives=[];
+ await page.getByRole('button',{name:'다시 분석',exact:true}).click();
+ await page.getByText('관점 분류 누락',{exact:false}).waitFor();
+ assert.equal(await page.locator('.opinion-gauge>span').count(),1);
  await page.locator('.collected-images>summary').click();
  assert.equal(await page.locator('.collected-images .opinion-entry').count(),result.images.length);
  await page.locator('.collected-images .source-link').last().click();

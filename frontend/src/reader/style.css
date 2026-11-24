@@ -120,4 +120,4 @@ h1,h2,h3,p{margin:0}.eyebrow{font-size:11px;color:#8a94a5;font-weight:500;letter
 .collected-comments>summary>svg:last-child,.collected-images>summary>svg{margin-left:auto}.collected-comments[open]>summary,.collected-images[open]>summary{margin-bottom:14px}
 
 .collected-comments[open]>summary>.section-chevron,.collected-images[open]>summary>.section-chevron{transform:rotate(180deg)}
-.collected-comments .check>summary::-webkit-details-marker{display:none}.comment-check-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.comment-check-heading>svg{flex:none;color:#7e8b9f}.collected-comments .check[open]>.comment-check-heading>svg,.collected-comments .check[open]>summary>.comment-check-heading>svg{transform:rotate(180deg)}
+.opinions .check>summary::-webkit-details-marker{display:none}.comment-check-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.comment-check-heading>svg{flex:none;color:#7e8b9f}.opinions .check[open]>.comment-check-heading>svg,.opinions .check[open]>summary>.comment-check-heading>svg{transform:rotate(180deg)}
