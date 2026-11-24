@@ -1,0 +1,5 @@
+Generated with the built-in image_gen tool.
+
+Use case: logo-brand.
+Create exactly ONE polished modern minimalist logo for "ScrollFact", a reading companion that connects sentences in articles to people's opinions and their reasons. The brand is about reading and connected perspectives.
+Design a distinctive simple geometric emblem that integrates two interlocking speech/quotation forms into a subtle S silhouette, with a short horizontal negative-space line suggesting a highlighted sentence. Keep the silhouette extremely clear, balanced, memorable and usable at small browser-extension icon sizes. Pair the emblem with the exact wordmark "ScrollFact" in refined clean modern sans-serif typography, medium weight with careful kerning. One horizontal lockup, emblem left and wordmark right, generous clear space around the single logo. Flat vector-like crisp solid shapes, restrained professional color treatment, no gradients, no shadows, no 3D, no mockup, no presentation sheet, no extra versions, no explanatory labels or tagline, no checkmark/shield/truth-rating symbolism. Transparent background.

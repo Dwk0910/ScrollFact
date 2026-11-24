@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:1440px;height:1000px;overflow:hidden;background:white;font-family:"Apple SD Gothic Neo",sans-serif}.crop{position:absolute;left:30px;top:70px;overflow:hidden}iframe{position:absolute;width:1440px;height:1000px;border:0;max-width:none;transform-origin:0 0}.note{position:absolute;color:#a83920;width:350px;font-size:25px}.note b{font-size:29px}.note p{font-size:21px;line-height:1.6;color:#596779}i{font-style:normal;background:#b44024;color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin-right:10px}.footer{position:absolute;left:30px;bottom:22px;font-size:17px;color:#697689}svg{position:absolute;inset:0;pointer-events:none}</style><div class="crop"><iframe src="service.html"></iframe></div><div class="note" style="left:1050px;top:200px"><b><i>1</i>글 전체의 의견 분포</b><p>관점별로 모인 의견을 한눈에</p></div><div class="note" style="left:1050px;top:440px"><b><i>2</i>의견에 담긴 이유</b><p>작성자가 밝힌 경험과 이유</p></div><div class="note" style="left:1050px;top:710px"><b><i>3</i>원문 위치</b><p>해당 의견의 원문으로 이동</p></div><div class="footer">실제 화면 부분 캡처 · 붉은 번호와 화살표는 포스터 설명용</div><svg width="1440" height="1000"></svg><script>
+const kind='perspectives', frame=document.querySelector('iframe');let stage=0;
+const timer=setInterval(()=>{const d=frame.contentDocument,w=frame.contentWindow;if(!d||!d.querySelector('.panel-toggle'))return;
+if(stage===0){if(d.querySelector('.opinion-panel').hidden){d.querySelector('.panel-toggle').click();return}stage=1;return}
+if(stage===1){if(kind==='context'){d.querySelector('#clause-s2-0').click()}else{d.querySelector('#legend-left').click()}stage=2;return}
+if(stage===2){stage=3;return}
+const sel=kind==='context'?'.analysis-card':'.panel-pinned';const area=d.querySelector(sel);if(!area)return;
+const r=area.getBoundingClientRect();const scale=kind==='context'?1.65:2.12;
+let bottom=kind==='context'?d.querySelector('.article-evidence').getBoundingClientRect().bottom:r.bottom;
+const cw=r.width+16,ch=bottom-r.top+14;
+const crop=document.querySelector('.crop');crop.style.width=cw*scale+'px';crop.style.height=ch*scale+'px';
+frame.style.transform=`scale(${scale})`;frame.style.left=-(r.left-8)*scale+'px';frame.style.top=-(r.top-6)*scale+'px';
+const targets=kind==='context'?['.reading-context h3','.reading-context p a','.sentence-selection']:['.gauge-track','.opinion-card blockquote','.text-action'];
+let lines='';targets.forEach((sel,i)=>{const b=d.querySelector(sel).getBoundingClientRect();const x=30+(b.right-r.left+8)*scale+5,y=70+(b.top+b.height/2-r.top+6)*scale;const start=kind==='context'?830:1030,sy=[218,458,728][i];lines+=`<path d="M ${start} ${sy} H ${start-22} V ${y} H ${x}" stroke="#b44024" stroke-width="3" fill="none" marker-end="url(#arrow)"/>`});
+document.querySelector('svg').innerHTML='<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L8 5 L1 9" fill="none" stroke="#b44024" stroke-width="2"/></marker></defs>'+lines;
+document.body.dataset.ready='true';clearInterval(timer);
+},150);</script>
