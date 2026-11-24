@@ -1,5 +1,15 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 macOS 개발 → Windows Docker 테스트 경로
+
+새 컴퓨터는 Git+Docker Desktop(Linux containers)만 설치하고 `start-test.cmd`를 실행한다. macOS는 `./start-test.sh`. 공통 명령 `docker compose up --build -d --wait --wait-timeout 180`. 멀티스테이지 Dockerfile이 Node24로 확장 ZIP, JDK21로 Spring JAR를 빌드하고 비루트 UID10001 런타임에서 실행한다. localhost:8080 설치 안내에서 확장 ZIP 다운로드→브라우저에 수동 로드→로컬 ID/키/모델 저장. 첫 빌드는 의존성 다운로드가 필요하다. 업데이트 후 새 ZIP 교체·확장 새로고침 필요.
+
+Compose는 호스트127.0.0.1에만 공개. 컨테이너 nginx8080→Spring127.0.0.1:8081이라 기존 localhost 설정 제한을 해제하지 않는다. DB는 data, 암호화 마스터 키는 별도 secrets named volume. SCROLLFACT_MASTER_KEY_FILE을 명시한 경우만 AES-GCM/file1 포맷,32바이트 키·0600·비심볼릭링크 검사. 복호화 시 키 유실/변조/권한 오류면 실패하며 재생성하지 않는다. 기본 macOS 키체인/Windows DPAPI 경로 유지. Docker 관리자에게까지 키를 숨기는 구조는 아니며 로컬 테스트 구성이다. API 키·원래 macOS DB를 이미지에 넣지 않는다. down은 보존, down -v는 데이터 삭제.
+
+.gitattributes 기본 LF, 셸/Gradle/Dockerfile/YAML LF, bat/cmd/ps1 CRLF, 바이너리 변환 금지. 임시 Git 인덱스와 core.autocrlf=true 체크아웃으로 실제 바이트 확인. .dockerignore는 필요한 소스만 허용하며 .env/DB/node_modules/산출물 제외.
+
+검증: macOS Docker Desktop arm64에서 실제 이미지 빌드·healthy, 시작 스크립트 재실행, 설치 페이지/확장 ZIP manifest·무결성, nginx 경유 프로필 로그인 및 gzip 진단2문단 성공. 컨테이너 재생성 뒤 프로필 옵션 및 테스트용 가짜 키 복호화 유지, 키파일600/UID10001 확인. 실제 API 호출 없음. frontend lint/build/check:extension, backend60검사 중56통과/4선택생략 및 bootJar. Windows 실기기·x64 컨테이너는 직접 검증하지 않았다. 이번 검증은 기존8080 서버와 별개인18080에서 수행했다. 자세한 사용법 docs/development/docker-testing.md.
+
 ## 2026-11-24 댓글을 상단 관점 게이지에 통합
 
 사용자는 단순 댓글 목록이 아니라 댓글을 입장·이유별로 분류한 상단 게이지가 핵심이라고 재확인했고 3분 내 수정 요청. 별도 댓글 목록을 제거하고 상단 관점 그룹 안에서 댓글 전체 원문·분류 이유·다섯 판단·원문 위치를 읽도록 통합했다. 댓글이 있으면 댓글만 분모로 삼고, 한 관점이어도 펼친 게이지를 표시한다. 기사 인용을 댓글 개수에 섞지 않는다. 댓글이 없으면 기존 기사 속 비교 가능한 복수 관점만 표시하는 동작 유지.
