@@ -1,13 +1,20 @@
 .scrollfact-active {
-  outline: 2px solid #39866a !important;
-  outline-offset: 6px !important;
-  border-radius: 3px;
-  background-color: rgb(57 134 106 / 5%) !important;
+  outline: none !important;
+  border-radius: 5px !important;
+  background-color: #eff4fa !important;
+  box-shadow: -8px 0 #eff4fa, -11px 0 #59759d, 8px 0 #eff4fa !important;
+}
+.scrollfact-range-overlay {
+  position: fixed !important;
+  pointer-events: none !important;
+  z-index: 2147483000 !important;
+  box-sizing: border-box !important;
+  border-left: 3px solid #59759d !important;
+  border-radius: 5px !important;
+  background: rgb(89 117 157 / 8%) !important;
 }
 html.scrollfact-open body {
   box-sizing: border-box !important;
   max-width: calc(100vw - var(--scrollfact-offset, 0px)) !important;
   margin-right: var(--scrollfact-offset, 0px) !important;
 }
-
-::highlight(scrollfact-paragraph) { background-color: #dceee6; color: inherit; }

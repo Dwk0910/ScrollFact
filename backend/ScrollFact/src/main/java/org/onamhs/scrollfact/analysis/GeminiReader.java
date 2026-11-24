@@ -62,7 +62,7 @@ public class GeminiReader {
         for (var part : candidate.path("content").path("parts"))
             if (!part.path("thought").asBoolean(false) && part.has("text")) json.append(part.path("text").asText());
         Output output;
-        try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); }
+        try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); output = preserveAttributedSpeech(output, input); }
         catch (ApiFailure e) { throw e; }
         catch (Exception e) { throw invalid(); }
         var usage = envelope.path("usageMetadata");

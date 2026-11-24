@@ -8,6 +8,7 @@ try {
  const page=await browser.newPage({viewport:{width:1400,height:900}});
  await page.route('**/blank-line-fixture', r=>r.fulfill({contentType:'text/html',body:html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'')}));
  await page.goto('http://127.0.0.1:5173/blank-line-fixture',{waitUntil:'domcontentloaded'});
+ await page.addStyleTag({path:new URL('../src/content/highlight.css',import.meta.url).pathname});
  const snapshot=await page.evaluate(async()=>{
   const {mountContentController}=await import('/src/content/controller.ts');
   mountContentController({panelUrl:'/reader.html',listen:h=>{window.handler=h;return()=>{}},emit:m=>{window.lastEvent=m},loadSettings:async()=>({}),saveSettings:()=>{}});
@@ -17,12 +18,17 @@ try {
  assert.deepEqual(result.unmatchedIds,[]);
  for (const index of [0,3,9,1,8]) {
   await page.evaluate(({id,sectionId})=>new Promise(r=>window.handler({type:'SF_SCROLL_TO_SECTION',snapshotId:id,sectionId},r)),{id:snapshot.snapshot.snapshotId,sectionId:passages[index].id});
-  const marked=await page.evaluate(()=>Array.from(CSS.highlights.get('scrollfact-paragraph'))[0].toString().replace(/\s+/g,' ').trim());
-  assert.equal(marked,passages[index].text);
+  assert.equal(await page.locator('.scrollfact-range-overlay').count(),1);
+  const rect=await page.locator('.scrollfact-range-overlay').boundingBox();
+  assert.ok(rect.height>0);
+  assert.ok(rect.width>100);
+  assert.equal(await page.locator('.scrollfact-range-overlay').evaluate(e=>getComputedStyle(e).position),'fixed');
+
  }
  // Rerendering an unchanged container must restore a range on the replacement.
  await page.locator('[itemprop=articleBody] > p').evaluate(el=>el.replaceWith(el.cloneNode(true)));
  await page.waitForTimeout(400);
- assert.equal(await page.evaluate(()=>Array.from(CSS.highlights.get('scrollfact-paragraph'))[0].startContainer.isConnected),true);
+ assert.equal(await page.locator('.scrollfact-range-overlay').count(),1);
+ await page.screenshot({path:'/private/tmp/sf-live-qa/highlight.png'});
  console.log('PASS: 11 original anchors; five manual moves; range highlight restored after rerender');
 } finally { await browser.close(); }

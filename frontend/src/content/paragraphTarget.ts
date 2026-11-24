@@ -14,13 +14,36 @@ export class ParagraphTarget {
     remove: (_name: string) => { void _name; this.setActive(false) },
     toggle: (_name: string, enabled: boolean) => { void _name; this.setActive(enabled) },
   }
+  private overlay: HTMLDivElement | null = null
+  private draw = () => {
+    if (!this.overlay) return
+    const rect = this.range.getBoundingClientRect()
+    const parent = this.element.getBoundingClientRect()
+    Object.assign(this.overlay.style, {
+      left: `${parent.left - 8}px`, top: `${rect.top - 4}px`,
+      width: `${parent.width + 16}px`, height: `${rect.height + 8}px`,
+      display: this.isConnected && rect.height > 0 ? 'block' : 'none',
+    })
+  }
   private setActive(enabled: boolean) {
-    const api = globalThis as unknown as { Highlight?: new (...ranges: Range[]) => unknown; CSS: { highlights?: Map<string, unknown> } }
-    if (api.Highlight && api.CSS.highlights) {
-      if (enabled) api.CSS.highlights.set('scrollfact-paragraph', new api.Highlight(this.range))
-      else if (this.active) api.CSS.highlights.delete('scrollfact-paragraph')
-    }
+    if (enabled === this.active) { if (enabled) this.draw(); return }
     this.active = enabled
+    if (enabled) {
+      this.overlay = document.createElement('div')
+      this.overlay.className = 'scrollfact-range-overlay'
+      this.overlay.dataset.scrollfactRoot = 'true'
+      this.overlay.setAttribute('aria-hidden', 'true')
+      // Outside body: never enter article extraction or trigger its DOM watcher.
+      document.documentElement.append(this.overlay)
+      this.draw()
+      window.addEventListener('scroll', this.draw, true)
+      window.addEventListener('resize', this.draw)
+    } else {
+      this.overlay?.remove()
+      this.overlay = null
+      window.removeEventListener('scroll', this.draw, true)
+      window.removeEventListener('resize', this.draw)
+    }
   }
   scrollIntoView(options: ScrollIntoViewOptions) {
     window.scrollBy({ top: this.range.getBoundingClientRect().top - window.innerHeight * .45, behavior: options.behavior })

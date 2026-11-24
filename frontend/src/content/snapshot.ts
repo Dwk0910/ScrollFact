@@ -1,7 +1,7 @@
 /** Keep the element tree stable so server-generated nth-of-type paths still match. */
 export function serializeUpload(document: Document): string {
   const clone = document.documentElement.cloneNode(true) as HTMLElement
-  clone.querySelector('#scrollfact-root')?.remove()
+  clone.querySelectorAll('#scrollfact-root, [data-scrollfact-root]').forEach(node => node.remove())
   clone.classList.remove('scrollfact-open')
   clone.style.removeProperty('--scrollfact-offset')
   clone.querySelectorAll('.scrollfact-active').forEach(node => node.classList.remove('scrollfact-active'))

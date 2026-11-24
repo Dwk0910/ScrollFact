@@ -14,6 +14,13 @@ try{
  await page.getByRole('button',{name:'이 페이지 분석하기',exact:true}).click();
  await page.getByText('AI 분석 완료 · 10개 문단',{exact:true}).waitFor();
  assert.equal(await page.locator('.opinions').getAttribute('open'),null);
+ assert.ok((await page.locator('.opinions').boundingBox()).height<=48);
+ assert.equal(await page.locator('.section-chevron').count(),1);
+ await page.locator('.opinions>summary').focus();
+ await page.keyboard.press('Enter');
+ assert.notEqual(await page.locator('.opinions').getAttribute('open'),null);
+ await page.keyboard.press('Enter');
+ assert.equal(await page.locator('.opinions').getAttribute('open'),null);
  assert.equal(await page.locator('.opinion-gauge').count(),0);
  assert.ok(await page.getByText('확인하지 않음',{exact:true}).count()>0);
  assert.equal(await page.getByText('확인 자료 부족',{exact:true}).count(),0);

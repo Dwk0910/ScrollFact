@@ -84,7 +84,7 @@ export function mountContentController(host: ContentHost) {
   // Local export is independent of analysis: saving must not reset the active watch.
   function serializePageHtml(): string {
     const clone = document.documentElement.cloneNode(true) as HTMLElement
-    clone.querySelector('#scrollfact-root')?.remove()
+    clone.querySelectorAll('#scrollfact-root, [data-scrollfact-root]').forEach(node => node.remove())
     clone.classList.remove('scrollfact-open')
     clone.style.removeProperty('--scrollfact-offset')
     clone.querySelectorAll('.scrollfact-active').forEach((node) => {
