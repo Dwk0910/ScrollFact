@@ -84,11 +84,16 @@ class ArticleScopeTest {
         assertThatThrownBy(() -> parser.parse("<article><p>" + "문단<br><br>".repeat(201) + "</p></article>", url)).isInstanceOf(ApiFailure.class);
     }
 
+    @Test void onlyStandaloneContactMetadataIsRemoved() {
+        var passages = parser.parse("<article><p>짧은 본문</p><p>신청은 help@example.org로 보내 달라고 말했다.</p><p>홍길동 기자 writer@example.org</p><p>writer@example.org</p></article>", url).passages();
+        assertThat(passages).extracting(p -> p.text()).containsExactly("짧은 본문", "신청은 help@example.org로 보내 달라고 말했다.");
+    }
+
     @Test void optionalEtnewsBlankLineRegression() throws Exception {
         String path = System.getenv("SCROLLFACT_ETNEWS_HTML");
         org.junit.jupiter.api.Assumptions.assumeTrue(path != null);
         var passages = parser.parse(java.nio.file.Files.readString(java.nio.file.Path.of(path)), "https://www.etnews.com/20261103000313").passages();
-        assertThat(passages).hasSize(11);
+        assertThat(passages).hasSize(10);
         assertThat(passages.get(3).text()).contains("도전", "성장", "상상");
         assertThat(passages.get(8).text()).contains("3000만원");
         assertThat(passages.get(9).text()).contains("정우성");

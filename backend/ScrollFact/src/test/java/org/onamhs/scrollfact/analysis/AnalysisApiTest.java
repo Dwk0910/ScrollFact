@@ -73,7 +73,7 @@ class AnalysisApiTest {
         }
         throw new AssertionError("Analysis never reached " + status);
     }
-    @Test void readerModePreservesOriginalSelectorsAndOmitsAuxiliaryWithoutScores() throws Exception {
+    @Test void readerModePreservesEveryParagraphEvenIfAiCallsItAuxiliary() throws Exception {
         when(reader.configured()).thenReturn(true);
         when(reader.analyze(any())).thenAnswer(invocation -> {
             EvaluationInput input = invocation.getArgument(0);
@@ -85,9 +85,10 @@ class AnalysisApiTest {
         waitFor(id, "completed");
         mvc.perform(get("/v1/analyses/" + id + "/result")).andExpect(status().isOk())
             .andExpect(jsonPath("$.kind").value("reader")).andExpect(jsonPath("$.schemaVersion").value("2.0"))
-            .andExpect(jsonPath("$.passages.length()").value(1)).andExpect(jsonPath("$.excludedBlocks").value(1))
-            .andExpect(jsonPath("$.passages[0].selector").value("html > body > article > p:nth-of-type(2)"))
-            .andExpect(jsonPath("$.blocks[0].summary").value("문단 해설"))
+            .andExpect(jsonPath("$.passages.length()").value(2)).andExpect(jsonPath("$.excludedBlocks").value(0))
+            .andExpect(jsonPath("$.passages[0].selector").value("html > body > article > p:nth-of-type(1)"))
+            .andExpect(jsonPath("$.blocks[0].title").value("원문 보존 · AI 해설 없음"))
+            .andExpect(jsonPath("$.blocks[1].summary").value("문단 해설"))
             .andExpect(jsonPath("$.inputTokens").value(123)).andExpect(jsonPath("$.overview").doesNotExist());
         verify(evaluator, never()).evaluate(any());
     }

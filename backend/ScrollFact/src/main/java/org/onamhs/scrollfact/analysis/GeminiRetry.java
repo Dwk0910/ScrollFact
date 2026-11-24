@@ -19,7 +19,11 @@ final class GeminiRetry {
         String requestId = UUID.randomUUID().toString();
         for (int attempt = 1; ; attempt++) {
             if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+            long started = System.nanoTime();
             var response = send.run();
+            LoggerFactory.getLogger(GeminiRetry.class).info(
+                "AI response id={} provider=Gemini model={} attempt={} http={} elapsedMs={}",
+                requestId, model, attempt, response.statusCode(), (System.nanoTime() - started) / 1_000_000);
             if (response.statusCode() != 503) return response;
             if (attempt == 3) {
                 throw ProviderFailure.response("Gemini", model, 503, response.body(), attempt, requestId);

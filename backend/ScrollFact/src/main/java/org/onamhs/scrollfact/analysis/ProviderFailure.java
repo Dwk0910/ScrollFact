@@ -22,6 +22,12 @@ final class ProviderFailure {
             var error = new ObjectMapper().readTree(body).path("error");
             String value = error.path("status").asText();
             String message = error.path("message").asText();
+            if (http == 503) {
+                String lower = message.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("high demand")) classification = "PROVIDER_HIGH_DEMAND";
+                else if (lower.contains("overload")) classification = "PROVIDER_OVERLOADED";
+                else if (lower.contains("capacity")) classification = "PROVIDER_CAPACITY";
+            }
             if (http == 404 && message.contains("no longer available to new users")) {
                 classification = "MODEL_UNAVAILABLE_TO_NEW_USERS";
                 var match = java.util.regex.Pattern.compile("use models/([A-Za-z0-9._-]{1,100})").matcher(message);

@@ -66,7 +66,7 @@ public class OpenAiReader {
         }
         if (json.isEmpty()) throw invalid();
         Output output;
-        try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); output = preserveAttributedSpeech(output, input); }
+        try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); output = preserveParagraphs(output, input); }
         catch (ApiFailure e) { throw e; }
         catch (Exception e) { throw invalid(); }
         return new Completion(output, model, envelope.path("usage").path("input_tokens").asLong(),

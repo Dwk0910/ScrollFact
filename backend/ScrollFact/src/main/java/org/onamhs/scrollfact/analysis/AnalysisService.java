@@ -120,10 +120,10 @@ public class AnalysisService {
             progress(id, "summarizing", pending.size(), pending.size(), failed);
             if ("reader".equals(meta.mode())) {
                 var completionResult = selectedReader.analyze(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
-                var output = completionResult.output();
+                var output = ReaderContract.preserveParagraphs(completionResult.output(), new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
                 var byId = new HashMap<String, ReaderModels.Block>();
                 output.blocks().forEach(b -> byId.put(b.id(), b));
-                var retained = page.passages().stream().filter(p -> !byId.get(p.id()).kind().equals("auxiliary")).toList();
+                var retained = page.passages(); // AI classification cannot change paragraph membership or order.
                 complete(id, new ReaderModels.Result("2.0", "reader", id, meta.snapshotId(), new DocumentInfo(meta.url(), meta.title()),
                     meta.htmlBytes(), retained, retained.stream().map(p -> byId.get(p.id())).toList(), output.perspectives(),
                     page.passages().size() - retained.size(), completionResult.model(), completionResult.inputTokens(), completionResult.outputTokens()));

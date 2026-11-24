@@ -22,7 +22,7 @@ public class HtmlParser {
             var chunks = paragraphTexts(element);
             for (int part = 0; part < chunks.size(); part++) {
                 String text = chunks.get(part);
-                if (text.isEmpty()) continue;
+                if (text.isEmpty() || isContactSignature(text)) continue;
                 characters += text.length();
                 if (passages.size() >= 200 || characters > 200_000)
                     throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
@@ -32,7 +32,7 @@ public class HtmlParser {
         }
         if (passages.isEmpty()) throw new ApiFailure(422, "no_passages", "분석할 문단을 찾지 못했습니다.");
         for (var link : scope.select("a[href]")) {
-            if (excluded(link)) continue;
+            if (excluded(link) || link.text().isBlank() || link.closest("figure") != null) continue;
             try {
                 URI uri = URI.create(link.absUrl("href")).normalize();
                 if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null) continue;
@@ -47,6 +47,13 @@ public class HtmlParser {
         }
         return new ParsedPage(List.copyOf(passages), List.copyOf(links));
     }
+    // Only a standalone email or a short reporter signature is unambiguously
+    // contact metadata. A sentence mentioning an email must remain in the article.
+    static boolean isContactSignature(String text) {
+        return text.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")
+            || text.matches("[가-힣A-Za-z· .-]{1,40} 기자\\s+[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
+    }
+
     // Blank lines delimit paragraphs; a single line break (address/verse) does not.
     static List<String> paragraphTexts(Element element) {
         String[] parts = element.html().split("(?i)<br\\s*/?>(?:[\\s\\u00a0]*<br\\s*/?>)+", -1);
