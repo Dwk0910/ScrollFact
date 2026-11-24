@@ -43,6 +43,9 @@ class OpenAiReaderTest {
             assertThat(request.path("input").asText()).doesNotContain("selector", "article > p");
             assertThat(auth.get()).isEqualTo("Bearer test-secret");
             assertThat(mapper.writeValueAsString(reader.status())).doesNotContain("test-secret");
+            var image = new ImageInput(new ImageMaterial("image-1", "img", "https://example.org/a.png", "설명"), "image/png", "aW1hZ2U=", null);
+            reader.analyze(new EvaluationInput(input.document(), input.passages(), input.sources(), List.of(image), event -> {}));
+            assertThat(mapper.readTree(received.get()).at("/input/0/content/2/image_url").asText()).isEqualTo("data:image/png;base64,aW1hZ2U=");
             output.set("{\"status\":\"incomplete\",\"output\":[]}");
             assertThatThrownBy(() -> reader.analyze(input)).isInstanceOf(ApiFailure.class);
             output.set("{\"status\":\"completed\",\"output\":[{\"content\":[{\"type\":\"refusal\"}]}]}");

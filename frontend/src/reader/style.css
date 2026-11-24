@@ -104,3 +104,20 @@ h1,h2,h3,p{margin:0}.eyebrow{font-size:11px;color:#8a94a5;font-weight:500;letter
 .markdown-table th{background:#f6f8fb;font-weight:650}
 .check .reader-markdown{font-size:13px;margin-top:8px}
 .check .reader-markdown a{display:inline;background:none;padding:0}
+.loading-progress{padding:26px 22px;max-width:520px;margin:auto}
+.loading-status{display:flex;align-items:flex-start;gap:10px;color:#315dba}
+.loading-status svg{flex:none;margin-top:3px}.loading-status h1{font-size:18px;line-height:1.5;color:#253858;font-weight:650}
+.loading-elapsed{font-size:12px;color:#7a8799;margin:10px 0 20px}
+.loading-steps{list-style:none;margin:0;padding:0}
+.loading-steps li{display:flex;align-items:center;gap:10px;min-height:38px;color:#8a94a5;font-size:13px}
+.loading-steps li>span{display:grid;place-items:center;border:1px solid #e0e6ee;width:22px;height:22px;border-radius:50%;font-size:11px}
+.loading-steps .is-current{color:#175bc8;font-weight:650}.loading-steps .is-current>span{background:#edf4ff;border-color:#9cbae9}.loading-steps .is-done{color:#526172}
+.loading-counts{border-top:1px solid #e6ebf2;margin-top:18px;padding-top:12px;font-size:12px;line-height:1.8;color:#526172}
+.loading-counts p{margin:5px 0}.loading-source-note{margin:14px 0;font-size:12px;line-height:1.7;color:#526172}
+.loading-source-note small{display:block;font-size:11px;color:#8a94a5;margin-top:5px}.loading-progress>.text-button{margin-top:14px}
+.collection-note{font-size:11px;line-height:1.7;color:#7a8799;margin-top:8px}.source-kind{color:#7a8799;font-size:11px}
+.collected-comments>summary,.collected-images>summary{cursor:pointer;list-style:none;margin:0;padding:0;border:0}.collected-comments>summary::-webkit-details-marker,.collected-images>summary::-webkit-details-marker{display:none}
+.collected-comments>summary>svg:last-child,.collected-images>summary>svg{margin-left:auto}.collected-comments[open]>summary,.collected-images[open]>summary{margin-bottom:14px}
+
+.collected-comments[open]>summary>.section-chevron,.collected-images[open]>summary>.section-chevron{transform:rotate(180deg)}
+.collected-comments .check>summary::-webkit-details-marker{display:none}.comment-check-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.comment-check-heading>svg{flex:none;color:#7e8b9f}.collected-comments .check[open]>.comment-check-heading>svg,.collected-comments .check[open]>summary>.comment-check-heading>svg{transform:rotate(180deg)}

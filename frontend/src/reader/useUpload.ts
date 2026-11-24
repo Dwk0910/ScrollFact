@@ -68,12 +68,16 @@ export function useUpload(followSource = true) {
       if (!valid()) return
       const watched: unknown = await chrome.tabs.sendMessage(tab.current, {
         type: MessageType.watchSections, snapshotId: response.snapshotId,
-        targets: response.passages.map(({ id, selector, text }) => ({ id, selector, text })),
+        targets: [
+          ...response.passages,
+          ...(response.kind === 'reader' ? response.comments || [] : []),
+          ...(response.kind === 'reader' ? (response.images || []).map(({id,selector})=>({id,selector})) : []),
+        ],
       })
       if (!valid()) return
       if (!isRecord(watched) || watched.ok !== true) throw new Error('전송 중 원문이 변경되었습니다. 다시 보내 주세요.')
       if (Array.isArray(watched.unmatchedIds) && watched.unmatchedIds.length)
-        setNotice(`${watched.unmatchedIds.length}개 문단은 원문과 연결되지 않았습니다. 원문 변경 여부를 확인해 주세요.`)
+        setNotice(`${watched.unmatchedIds.length}개 항목은 원문과 연결되지 않았습니다. 원문 변경 여부를 확인해 주세요.`)
       current.current = response; setResult(response)
     } catch (error) {
       if (task.current === controller) setNotice(controller.signal.aborted
@@ -97,5 +101,15 @@ export function useUpload(followSource = true) {
       setActive(index)
     } catch (error) { setNotice(error instanceof Error ? error.message : '원문으로 이동하지 못했습니다.') }
   }
-  return { result, busy, notice, active, progress, upload, cancel, jump, inExtension }
+  async function jumpSource(id: string) {
+    const data = current.current
+    if (!data || tab.current === null) return
+    const index = data.passages.findIndex(p => p.id === id)
+    if (index >= 0) { await jump(index); return }
+    try {
+      const response: unknown = await chrome.tabs.sendMessage(tab.current, {type: MessageType.scrollToSection, snapshotId:data.snapshotId, sectionId:id})
+      if (!isRecord(response) || response.ok !== true) throw new Error('이 댓글이나 이미지의 원문 위치를 찾지 못했어요. 페이지에서 다시 불러온 뒤 분석해 주세요.')
+    } catch (error) { setNotice(error instanceof Error ? error.message : '원문으로 이동하지 못했어요.') }
+  }
+  return { result, busy, notice, active, progress, upload, cancel, jump, jumpSource, inExtension }
 }

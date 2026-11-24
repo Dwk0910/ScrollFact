@@ -175,10 +175,11 @@ function createJobRunner<T extends { analysisId: string; snapshotId: string; doc
         onProgress?.({
           phase: job.phase,
           sources: job.sources,
+          detail: job.progress,
           originalBytes: html.size,
           uploadedBytes: compressed.size,
         })
-        await waitForPoll(2000, signal)
+        await waitForPoll(750, signal)
         job = await readJob(
           await request(`${endpoint}/${encodeURIComponent(jobId)}`),
         )
@@ -202,7 +203,11 @@ export type ReaderCheck = {
   reason: string
   evidence: { url: string; quote: string }[]
 }
+export interface ReaderImage { id: string; selector: string; url: string; caption: string; included: boolean; failure?: string | null }
 export interface ReaderResult {
+  comments?: { id: string; selector: string; text: string }[]
+  commentAreaDetected?: boolean
+  images?: ReaderImage[]
   schemaVersion: '2.0'
   kind: 'reader'
   analysisId: string
@@ -225,7 +230,17 @@ export function isReaderResult(value: unknown): value is ReaderResult {
     || !Number.isSafeInteger(value.inputTokens) || !Number.isSafeInteger(value.outputTokens) || typeof value.model !== 'string'
     || !Array.isArray(value.passages) || !Array.isArray(value.blocks) || !Array.isArray(value.perspectives)) return false
   const passages = new Map<string, string>()
-  for (const p of value.passages) {
+  if (value.comments !== undefined && !Array.isArray(value.comments)) return false
+  if (value.commentAreaDetected !== undefined && typeof value.commentAreaDetected !== 'boolean') return false
+  if (value.images !== undefined && !Array.isArray(value.images)) return false
+  const imagePassages: { id: string; selector: string; text: string }[] = []
+  for (const image of (value.images || []) as unknown[]) {
+    if (!isRecord(image) || typeof image.id !== 'string' || typeof image.selector !== 'string' || typeof image.caption !== 'string'
+      || typeof image.url !== 'string' || typeof image.included !== 'boolean' || (image.failure != null && typeof image.failure !== 'string')) return false
+    try { if (!['http:', 'https:'].includes(new URL(image.url).protocol)) return false } catch { return false }
+    imagePassages.push({id:image.id,selector:image.selector,text:image.caption})
+  }
+  for (const p of [...value.passages, ...((value.comments || []) as unknown[]), ...imagePassages]) {
     if (!isRecord(p) || typeof p.id !== 'string' || passages.has(p.id) || typeof p.selector !== 'string' || typeof p.text !== 'string') return false
     passages.set(p.id, p.text)
   }
@@ -246,7 +261,7 @@ export function isReaderResult(value: unknown): value is ReaderResult {
   }
   return ids.size === passages.size && value.perspectives.every(p => isRecord(p) && typeof p.label === 'string'
     && Array.isArray(p.entries) && p.entries.length > 0 && p.entries.every((e: unknown) => isRecord(e)
-      && typeof e.blockId === 'string' && passages.has(e.blockId) && typeof e.quote === 'string'
+      && typeof e.blockId === 'string' && passages.has(e.blockId) && !imagePassages.some(image => image.id === e.blockId) && typeof e.quote === 'string'
       && Boolean(e.quote) && passages.get(e.blockId)!.includes(e.quote) && typeof e.reason === 'string'))
 }
 export function createReaderAnalyzer(baseUrl: string) {

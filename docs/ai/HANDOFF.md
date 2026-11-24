@@ -1,5 +1,19 @@
 # ScrollFact AI 인수인계
 
+## 2026-11-24 진행 상태·댓글 수집·본문 이미지 입력
+
+사용자 요청: 로딩 현황을 즉시 보여 주고, 자료 0/0 의미를 고치며, 네이버 댓글과 이미지 누락을 확인. 대상 https://n.news.naver.com/article/215/0001273805?cds=news_media_pc . 댓글 첨부 HTML은 사용자 로컬 파일로만 검사하며 저장소에 포함하지 않았다.
+
+기존 sources는 기사 본문에 연결된 외부 출처 URL 수였으며 댓글/이미지 수가 아니다. 작업 응답에 progress를 추가해 수집된 문단·불러온 댓글·본문 이미지 수, 이미지 준비/실패 수, AI 시도 횟수/최대 시도/재시도 시각/응답 검증 단계를 전달한다. 화면은 분석 버튼 직후 표시하고 750ms 상태 조회, 경과 시간/재시도 대기를 표시한다. 외부 출처 0이면 숫자 대신 링크가 없다는 설명. 웹 검색을 수행했다고 표현하지 않는다.
+
+CommentExtractor는 schema.org/comment 공통 마크업과 명시적 댓글 위젯(.u_cbox 등)을 지원한다. 본문 밖에서도 댓글 본문만 수집하며 닉네임·추천 수·입력 초안·숨김/삭제 안내는 제외한다. 현재 DOM에 불러온 댓글만 대상, 전체 댓글/추가 페이지 자동 로딩/iframe 댓글 수집은 구현하지 않았다. AI input sourceKind로 기사·댓글·이미지를 구분하고 댓글은 별도 comments로 반환한다. 문단 번호는 기사 본문만 유지. 관점 묶음은 실제 기사 발언/댓글에서만 인용, 이미지로 의견을 만들지 않는다. 별도 접힌 댓글 목록에서도 원문·해설·구절 판단·출처/원문 위치를 볼 수 있다.
+
+snapshot에 img.currentSrc(또는 lazy data-src)를 보존. 본문 영역 이미지/캡션을 추출하며 작은 아이콘(렌더링 48px 이하), 버튼/광고 마크업/숨김은 제외한다. 서버는 공개 HTTP(S), 사설망 차단·쿠키/리다이렉트 없음·15초·JPEG/PNG/WebP·이미지당 2MiB 제한으로 실제 바이트를 읽는다. 최대20개, 총 base64 12MB 초과분은 명시적 실패 사유로 남긴다. Gemini inlineData/OpenAI input_image로 전송. 이미지 자체를 읽지 못하면 캡션만 제공했다고 구분한다. 캡션/이미지 결과와 원문 이동은 별도 접힌 영역. raw 이미지 바이트는 결과 DB에 저장하지 않는다. CSS 배경/캔버스/다른 포맷은 지원하지 않으며 서버 접근이 막힌 이미지는 실패 사유를 표시한다.
+
+검증: backend 57개 중54 통과/3 선택적 생략, bootJar 성공. API10/feed6 및 frontend lint/build/check:extension. 실제 격리 Whale에서 ETNews 본문10+이미지1, 네이버 본문21+불러온댓글5+이미지2 모두 원문 매칭/수동 이동/동일 하이라이트 확인(총39회, 미연결0). 현재 네이버 본문은 이전 검사 이후 내용이 갱신되었다. 이미지2개 공개 다운로드 성공, 실제 Gemini 멀티모달 요청은503 반복(관측한1~5회), 최종 분석 성공은 확인하지 못했다. 성공을 주장하지 말 것. 제공자 payload/진행 API는 HTTP 스텁 테스트, 화면·카운트다운/원문 이동/320px은 명시적 합성 응답으로 검증했다. 설치 확장 전체와 실제 AI 최종 출력 품질은 이 검사와 구분한다.
+
+실행: 서버 재시작 → 확장 새로고침 → 기사 새로고침, 필요한 댓글을 페이지에 불러온 뒤 재분석. 과거 분석 결과는 재처리하지 않는다. browser 회귀: frontend/tests/dom-anchor-browser.mjs, reader-materials-browser.mjs. API 추가 계약은 frontend/docs/backend-api.md. 이미지 입력 참고: https://ai.google.dev/gemini-api/docs/image-understanding , https://developers.openai.com/api/docs/guides/images-vision .
+
 ## 2026-11-24 원문 DOM 보존·직접 텍스트 본문·최종 리더 배치
 
 네이버 URL https://n.news.naver.com/article/215/0001273805?cds=news_media_pc 는 article에 p 없이 텍스트/연속 br로 본문을 구성한다. 기존 contentSize가 p/li만 세어 article을 놓치고 body 메뉴까지 출처로 수집해 40개 상한 오류 발생. 공통 DOM 순회로 inline 텍스트와 block 경계/빈 줄을 나누며, 본문으로 선택한 구간의 링크만 수집한다. 사이트 도메인/ID 분기 없음. 실제 본문 출처가 40개를 넘으면 여전히 명시적 실패하며 근거를 조용히 자르지 않는다.

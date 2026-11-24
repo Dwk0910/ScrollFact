@@ -1,19 +1,16 @@
 import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MessageSquare, AlignLeft, ArrowRight, Settings2, CircleHelp, X, LoaderCircle, RotateCcw, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ExternalLink, MessageSquare, AlignLeft, ArrowRight, Settings2, CircleHelp, X, RotateCcw, Check } from 'lucide-react'
 import logo from '../../../assets/branding/scrollfact-logo.png'
 import { useUpload } from './useUpload'
-import { isRecord, type AnalysisProgress } from '../types'
+import { isRecord } from '../types'
 import type { ReaderCheck } from '../api/analyze'
 import './style.css'
 import SettingsPanel from './SettingsPanel'
 import ReaderMarkdown from './ReaderMarkdown'
+import LoadingProgress from './LoadingProgress'
 import { asProfile, profileRequest, type Profile } from './profile'
 
-const phases: Record<AnalysisProgress['phase'], string> = {
-  capturing: '읽던 페이지를 가져오고 있어요', compressing: '페이지를 준비하고 있어요', uploading: '분석할 내용을 전달하고 있어요',
-  queued: '분석을 기다리고 있어요', extracting: '본문의 흐름을 살피고 있어요', checking_sources: '연결된 자료를 확인하고 있어요', summarizing: '문단의 맥락과 관점을 정리하고 있어요',
-}
 const labels: Record<ReaderCheck['status'], string> = { supported: '자료와 일치', contradicted: '자료와 불일치', contested: '근거가 엇갈림', needs_verification: '확인하지 않음', opinion: '의견·제안' }
 type Preferences = { server: string; follow: boolean; mode: 'reader' | 'diagnostic' }
 const defaults: Preferences = { server: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080', follow: true, mode: 'reader' }
@@ -28,7 +25,7 @@ function loadPreferences(): Preferences {
 export default function Reader() {
   const [preferences, setPreferences] = useState(loadPreferences)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const { result, busy, notice, active, progress, upload, cancel, jump, inExtension } = useUpload(preferences.follow)
+  const { result, busy, notice, active, progress, upload, cancel, jump, jumpSource, inExtension } = useUpload(preferences.follow)
   const [view, setView] = useState<'about' | 'settings' | null>(null)
   const [settingsPage, setSettingsPage] = useState<'home' | 'ai'>('home')
   const [connection, setConnection] = useState('연결 상태를 확인해 주세요')
@@ -101,11 +98,12 @@ export default function Reader() {
       {!inExtension && <small>설치한 확장 프로그램에서 분석할 수 있어요</small>}
       {notice && <div className="notice" role="alert"><p>{notice}</p>{/Gemini HTTP 503/.test(notice) && <button className="text-button" onClick={() => { setSettingsPage('ai'); setView('settings') }}>다른 모델 선택 <ChevronRight size={14} /></button>}</div>}
       </div><button className="about-link" onClick={() => setView('about')}><CircleHelp size={16} /> ScrollFact란?</button>
-    </main> : busy ? <main className="loading" aria-live="polite"><LoaderCircle className="spinner" size={26} /><h1>{phases[progress.phase]}</h1><p>잠시만 기다려 주세요.<br />읽던 글의 위치는 그대로 유지돼요.</p>{progress.sources && <small>자료 {progress.sources.completed}/{progress.sources.total ?? '확인 중'}</small>}<button className="text-button" onClick={cancel}>분석 중단</button></main> : <main className="results">
+    </main> : busy ? <LoadingProgress progress={progress} cancel={cancel} /> : <main className="results">
       <div className="document-heading"><span className="eyebrow">{result && new URL(result.document.url).hostname}</span><h1>{result?.document.title}</h1><div className="result-actions"><span className="status"><Check size={13} />{analysis ? 'AI 분석 완료' : '서버 수신 완료'} · {result?.passages.length}개 문단</span><button className="icon-button" onClick={start} aria-label="다시 분석"><RotateCcw size={15} /></button></div></div>
       {notice && <div className="notice" role="alert"><p>{notice}</p>{/Gemini HTTP 503/.test(notice) && <button className="text-button" onClick={() => { setSettingsPage('ai'); setView('settings') }}>다른 모델 선택 <ChevronRight size={14} /></button>}</div>}
+      {analysis && <p className="collection-note">불러온 댓글 {analysis.comments?.length || 0}개 · 본문 이미지 {analysis.images?.length || 0}개{analysis.commentAreaDetected && !analysis.comments?.length ? ' · 댓글 영역의 내용을 먼저 불러온 뒤 다시 분석해 주세요.' : ''}</p>}
       <details key={result?.snapshotId} open={!!analysis && analysis.perspectives.length > 1} className="analysis-section opinions"><summary className="section-title"><MessageSquare size={17} /><h2>글 전체 의견</h2><span>{analysis && analysis.perspectives.length > 1 ? '관점 파악' : '비교할 의견 없음'}</span><ChevronDown className="section-chevron" size={16} aria-hidden="true" /></summary>
-        {analysis && analysis.perspectives.length > 1 && totalOpinions > 0 ? <><div className="opinion-gauge" aria-label="확인한 발언의 관점별 구성">{analysis.perspectives.map((p, i) => <span key={i} style={{ flex: p.entries.length, background: ['#5975d9', '#a88b55', '#9c79c2', '#5b9a9a'][i % 4] }} />)}</div><p className="caption">이 글에서 확인한 발언 {totalOpinions}개 기준 · 여론조사가 아니에요</p>{analysis.perspectives.map((p, i) => <details className="perspective" key={i}><summary><ChevronDown size={14} aria-hidden="true" />{p.label}<span>{p.entries.length}</span></summary>{p.entries.map((entry, j) => <div className="opinion-entry" key={j}><blockquote>{entry.quote}</blockquote><p>{entry.reason}</p><button className="source-link" onClick={() => void jump(analysis.passages.findIndex(p => p.id === entry.blockId))}>원문 위치 <ExternalLink size={12} /></button></div>)}</details>)}</> : <p className="empty-copy">{analysis ? '같은 쟁점에서 비교할 서로 다른 의견을 확인하지 못했어요. 기사 속 인용을 댓글이나 여론으로 간주하지 않아요.' : '연결 점검에서는 의견을 분석하지 않아요.'}</p>}
+        {analysis && analysis.perspectives.length > 1 && totalOpinions > 0 ? <><div className="opinion-gauge" aria-label="확인한 발언의 관점별 구성">{analysis.perspectives.map((p, i) => <span key={i} style={{ flex: p.entries.length, background: ['#5975d9', '#a88b55', '#9c79c2', '#5b9a9a'][i % 4] }} />)}</div><p className="caption">이 글에서 확인한 발언 {totalOpinions}개 기준 · 여론조사가 아니에요</p>{analysis.perspectives.map((p, i) => <details className="perspective" key={i}><summary><ChevronDown size={14} aria-hidden="true" />{p.label}<span>{p.entries.length}</span></summary>{p.entries.map((entry, j) => <div className="opinion-entry" key={j}><small className="source-kind">{entry.blockId.startsWith('comment-') ? '댓글' : '기사 속 발언'}</small><blockquote>{entry.quote}</blockquote><p>{entry.reason}</p><button className="source-link" onClick={() => void jumpSource(entry.blockId)}>원문 위치 <ExternalLink size={12} /></button></div>)}</details>)}</> : <p className="empty-copy">{analysis ? '같은 쟁점에서 비교할 서로 다른 의견을 확인하지 못했어요. 기사 속 인용을 댓글이나 여론으로 간주하지 않아요.' : '연결 점검에서는 의견을 분석하지 않아요.'}</p>}
       </details>
       <section className="analysis-section context"><div className="section-title"><AlignLeft size={17} /><h2>현재 문단</h2><span>글 맥락 분석</span></div>
         {passage ? <div key={passage.id}>
@@ -115,6 +113,8 @@ export default function Reader() {
           <details className="original"><summary><ChevronDown size={14} aria-hidden="true" />원문 읽기 · {active + 1}문단</summary><blockquote>{passage.text}</blockquote><button className="source-link" onClick={() => void jump(active)}>원문 위치 <ExternalLink size={12} /></button></details>
         </div> : <p className="empty-copy">분석할 본문을 찾지 못했어요. 원문 추출 범위를 확인해야 해요.</p>}
       </section>
+      {!!analysis?.comments?.length && <details className="analysis-section collected-comments"><summary className="section-title"><MessageSquare size={17}/><h2>불러온 댓글 {analysis.comments.length}개</h2><ChevronDown className="section-chevron" size={16} aria-hidden="true"/></summary><p className="caption">분석할 때 페이지에 불러온 댓글만 포함해요. 전체 댓글 수나 여론을 뜻하지 않아요.</p>{analysis.comments.map(comment=>{const block=analysis.blocks.find(b=>b.id===comment.id);return <article className="opinion-entry" key={comment.id}><blockquote>{comment.text}</blockquote>{block&&<ReaderMarkdown text={block.summary}/>}<button className="source-link" onClick={()=>void jumpSource(comment.id)}>댓글 원문 위치 <ExternalLink size={12}/></button>{block?.checks.map((c,i)=><details key={i} className={`check check-${c.status}`}><summary><span className="comment-check-heading"><span className="check-label">{labels[c.status]}</span><ChevronDown size={14} aria-hidden="true"/></span><span>{c.quote}</span></summary><ReaderMarkdown text={c.reason}/>{c.evidence.map(e=><a key={e.url+e.quote} href={e.url} target="_blank" rel="noopener noreferrer">{e.quote}</a>)}</details>)}</article>})}</details>}
+      {!!analysis?.images?.length && <details className="analysis-section collected-images"><summary className="section-title"><h2>본문 이미지 {analysis.images.length}개</h2><ChevronDown className="section-chevron" size={16} aria-hidden="true"/></summary>{analysis.images.map(image=><article className="opinion-entry" key={image.id}><p className="caption">{image.caption}</p>{!image.included&&<p className="notice">{image.failure || '이미지를 읽지 못했어요. 캡션만 전달했어요.'}</p>}<ReaderMarkdown text={analysis.blocks.find(b=>b.id===image.id)?.summary || ''}/><button className="source-link" onClick={()=>void jumpSource(image.id)}>이미지 원문 위치 <ExternalLink size={12}/></button></article>)}</details>}
       <details className="receipt"><summary><ChevronDown size={14} aria-hidden="true" />분석 정보</summary>{analysis ? <><p>AI 모델 · {analysis.model}</p><p>부가정보로 분류된 블록 {analysis.excludedBlocks}개</p><p>입력 {analysis.inputTokens.toLocaleString()} · 출력 {analysis.outputTokens.toLocaleString()} 토큰</p><p>AI 판단은 오류가 있을 수 있어요. 연결된 원문과 근거를 함께 확인해 주세요.</p></> : <p>연결 점검 결과입니다. AI 분석은 실행하지 않았어요.</p>}</details>
     </main>}
     <dialog ref={dialog} onCancel={() => setView(null)} onClose={() => setView(null)} className="sheet" aria-label={view === 'settings' ? '설정' : 'ScrollFact란?'}>{view === 'about' && <div className="sheet-header"><h2>{view === 'about' ? 'ScrollFact란?' : '설정'}</h2><button className="icon-button" aria-label="닫기" onClick={() => setView(null)}><X size={18} /></button></div>}

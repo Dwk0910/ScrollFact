@@ -130,6 +130,29 @@ class AnalysisApiTest {
             mvc.perform(get("/v1/analyses/" + id)).andExpect(status().isNotFound());
         } finally { release.countDown(); }
     }
+    @Test void readerPublishesRealMaterialCountsAndRetryProgressWithSeparateCommentAnchors() throws Exception {
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        when(reader.configured()).thenReturn(true);
+        when(fetcher.fetchImage(any())).thenAnswer(invocation->new ImageInput(invocation.getArgument(0),"image/png","aW1hZ2U=",null));
+        when(reader.analyze(any())).thenAnswer(invocation->{
+            EvaluationInput in=invocation.getArgument(0);
+            in.progress().accept(new AiProgress("retry_wait",2,6,System.currentTimeMillis()+2000));entered.countDown();release.await();
+            var blocks=in.passages().stream().map(p->new ReaderModels.Block(p.id(),p.id().startsWith("comment-")?"opinion":"body","제목","해설",List.of())).toList();
+            return new ReaderModels.Completion(new ReaderModels.Output(blocks,List.of()),"test-model",10,20);
+        });
+        String html="<article><p>원문</p><img src='https://example.org/chart.png' alt='차트 설명'></article><div class='comments'><div data-comment-id='a'><div data-comment-body>실제 댓글</div></div></div>";
+        String id=create(UUID.randomUUID().toString(),html,"reader").path("analysisId").asText();
+        try {
+            assertThat(entered.await(3,TimeUnit.SECONDS)).isTrue();
+            mvc.perform(get("/v1/analyses/"+id)).andExpect(jsonPath("$.progress.stage").value("retry_wait"))
+                .andExpect(jsonPath("$.progress.attempt").value(2)).andExpect(jsonPath("$.progress.comments").value(1))
+                .andExpect(jsonPath("$.progress.imagesCompleted").value(1)).andExpect(jsonPath("$.sources.total").value(0));
+        } finally {release.countDown();}
+        waitFor(id,"completed");
+        mvc.perform(get("/v1/analyses/"+id+"/result")).andExpect(jsonPath("$.passages.length()").value(1))
+            .andExpect(jsonPath("$.comments.length()").value(1)).andExpect(jsonPath("$.comments[0].text").value("실제 댓글"))
+            .andExpect(jsonPath("$.images[0].included").value(true)).andExpect(jsonPath("$.blocks.length()").value(3));
+    }
     @Test void unconfiguredEvaluatorReturns503WithoutFabricatingResults() throws Exception {
         when(evaluator.configured()).thenReturn(false);
         String id = UUID.randomUUID().toString(); byte[] raw = HTML.getBytes(StandardCharsets.UTF_8);

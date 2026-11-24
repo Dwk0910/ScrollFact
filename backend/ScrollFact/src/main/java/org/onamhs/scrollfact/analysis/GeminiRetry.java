@@ -22,6 +22,9 @@ final class GeminiRetry {
     }
 
     static HttpResponse<byte[]> send(String model, Send send, Sleep sleep, LongSupplier clock) throws IOException, InterruptedException {
+        return send(model, send, sleep, clock, event -> {});
+    }
+    static HttpResponse<byte[]> send(String model, Send send, Sleep sleep, LongSupplier clock, java.util.function.Consumer<AnalysisModels.AiProgress> progress) throws IOException, InterruptedException {
         final long budget = Duration.ofMinutes(4).toNanos();
         final long startedAll = clock.getAsLong();
         String requestId = UUID.randomUUID().toString();
@@ -29,6 +32,7 @@ final class GeminiRetry {
             if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
             long started = System.nanoTime();
             long remaining = Math.max(1, budget - (clock.getAsLong() - startedAll));
+            progress.accept(new AnalysisModels.AiProgress("requesting", attempt, 6, 0));
             var response = send.run(Duration.ofNanos(Math.min(remaining, Duration.ofSeconds(180).toNanos())));
             LoggerFactory.getLogger(GeminiRetry.class).info(
                 "AI response id={} provider=Gemini model={} attempt={} http={} elapsedMs={}",
@@ -41,6 +45,7 @@ final class GeminiRetry {
             LoggerFactory.getLogger(GeminiRetry.class).warn(
                 "AI retry id={} provider=Gemini model={} http=503 attempt={} maxAttempts=6 delayMs={}",
                 requestId, model, attempt, delay);
+            progress.accept(new AnalysisModels.AiProgress("retry_wait", attempt, 6, System.currentTimeMillis() + delay));
             sleep.run(delay);
         }
     }

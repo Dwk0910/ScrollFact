@@ -12,7 +12,7 @@ public final class AnalysisModels {
     }
     public record SourceProgress(int completed, Integer total, int failed) {}
     public record JobView(String analysisId, String snapshotId, String status, String phase,
-                          SourceProgress sources, String error) {}
+                          SourceProgress sources, String error, WorkProgress progress) {}
     public record DocumentInfo(String url, String title) {}
     public record Assessment(int score, String status, String summary) {}
     public record Reason(String title, String detail) {}
@@ -26,11 +26,26 @@ public final class AnalysisModels {
                                    DocumentInfo document, long htmlBytes, List<Passage> passages,
                                    List<DiagnosticSource> sources) {}
     public record Passage(String id, String selector, String text) {}
-    public record ParsedPage(List<Passage> passages, List<String> sourceUrls) {}
+    public record ParsedPage(List<Passage> passages, List<String> sourceUrls, List<Passage> comments, boolean commentAreaDetected, List<ImageMaterial> images) {
+        public ParsedPage(List<Passage> passages, List<String> sourceUrls) { this(passages, sourceUrls, List.of(), false, List.of()); }
+    }
+    public record ImageMaterial(String id, String selector, String url, String caption) {}
+    public record ImageInput(ImageMaterial material, String mimeType, String base64, String failure) {
+        public boolean available() { return failure == null; }
+    }
+    public record ImageResult(String id, String selector, String url, String caption, boolean included, String failure) {}
+    public record AiProgress(String stage, int attempt, int maxAttempts, long retryAt) {}
+    public record WorkProgress(String stage, int paragraphs, int comments, boolean commentAreaDetected, int images, int imagesCompleted, int imagesFailed, int attempt, int maxAttempts, long retryAt) {
+        public WorkProgress ai(AiProgress p) { return new WorkProgress(p.stage(), paragraphs, comments, commentAreaDetected, images, imagesCompleted, imagesFailed, p.attempt(), p.maxAttempts(), p.retryAt()); }
+    }
     public record SourceDocument(String url, String title, String publisher, String text, String failure) {
         public boolean available() { return failure == null; }
     }
-    public record EvaluationInput(DocumentInfo document, List<Passage> passages, List<SourceDocument> sources) {}
+    public record EvaluationInput(DocumentInfo document, List<Passage> passages, List<SourceDocument> sources,
+                                  @com.fasterxml.jackson.annotation.JsonIgnore List<ImageInput> images,
+                                  @com.fasterxml.jackson.annotation.JsonIgnore java.util.function.Consumer<AiProgress> progress) {
+        public EvaluationInput(DocumentInfo document, List<Passage> passages, List<SourceDocument> sources) { this(document, passages, sources, List.of(), p -> {}); }
+    }
     public record EvaluatedSection(String id, String title, int score, String status, String summary,
                                    List<Reason> reasons, List<String> sourceUrls) {}
     public record Evaluation(Assessment overview, List<EvaluatedSection> sections) {}

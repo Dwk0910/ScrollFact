@@ -16,6 +16,8 @@ try {
   const page=await browser.newPage({viewport:{width:1440,height:960},bypassCSP:true});
   await page.goto(urls[i],{waitUntil:'domcontentloaded'});
   await page.waitForTimeout(5000);
+  const comments=page.locator('.u_cbox').first();
+  if(await comments.count()){await comments.scrollIntoViewIfNeeded();await page.waitForTimeout(2000);}
   // Isolated test browser permits importing the local controller on the publisher origin.
   await page.addStyleTag({path:new URL('../src/content/highlight.css',import.meta.url).pathname});
   const snapshot=await page.evaluate(async()=>{
@@ -32,9 +34,10 @@ try {
   assert.ok(passages.length>1);
   if(i===0){assert.equal(passages.length,10);assert.ok(passages.at(-1).text.includes('정우성'));}
   if(i===1)assert.equal(parsed.sourceUrls.length,0);
-  const result=await page.evaluate(({id,passages})=>new Promise(r=>window.handler({type:'SF_WATCH_SECTIONS',snapshotId:id,targets:passages},r)),{id:snapshot.snapshot.snapshotId,passages});
+  const targets=[...passages,...(parsed.comments||[]),...(parsed.images||[]).map(({id,selector})=>({id,selector}))];
+  const result=await page.evaluate(({id,passages})=>new Promise(r=>window.handler({type:'SF_WATCH_SECTIONS',snapshotId:id,targets:passages},r)),{id:snapshot.snapshot.snapshotId,passages:targets});
   assert.deepEqual(result.unmatchedIds,[]);
-  for (const p of passages) {
+  for (const p of targets) {
    const moved=await page.evaluate(({id,sectionId})=>new Promise(r=>window.handler({type:'SF_SCROLL_TO_SECTION',snapshotId:id,sectionId},r)),{id:snapshot.snapshot.snapshotId,sectionId:p.id});
    assert.equal(moved.ok,true);
    assert.equal(await page.locator('.scrollfact-active,.scrollfact-range-overlay').count(),1);
@@ -56,7 +59,7 @@ try {
   await page.evaluate(({id,sectionId})=>new Promise(r=>window.handler({type:'SF_SCROLL_TO_SECTION',snapshotId:id,sectionId},r)),{id:snapshot.snapshot.snapshotId,sectionId:passages.at(-1).id});
   await page.waitForTimeout(500);
   await page.screenshot({path:`${dir}/source-${i}-highlight.png`});
-  console.log(JSON.stringify({url:urls[i],paragraphs:passages.length,sources:parsed.sourceUrls.length,unmatched:result.unmatchedIds.length,manualMoves:passages.length}));
+  console.log(JSON.stringify({url:urls[i],paragraphs:passages.length,sources:parsed.sourceUrls.length,unmatched:result.unmatchedIds.length,manualMoves:targets.length,comments:parsed.comments.length,images:parsed.images.length}));
   await page.close();
  }
 } finally {await browser.close();}

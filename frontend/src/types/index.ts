@@ -153,13 +153,20 @@ export interface SourceProgress {
   total: number | null
   failed: number
 }
+export interface WorkProgress {
+  stage: 'sources' | 'images' | 'requesting' | 'retry_wait' | 'validating'
+  paragraphs: number; comments: number; commentAreaDetected: boolean
+  images: number; imagesCompleted: number; imagesFailed: number
+  attempt: number; maxAttempts: number; retryAt: number
+}
 export interface AnalysisProgress {
+  detail?: WorkProgress
   phase: AnalysisPhase
   sources?: SourceProgress
   originalBytes?: number
   uploadedBytes?: number
 }
-type JobIdentity = { analysisId: string; snapshotId: string }
+type JobIdentity = { analysisId: string; snapshotId: string; progress?: WorkProgress }
 export type AnalysisJob = JobIdentity &
   (
     | {
@@ -178,6 +185,13 @@ export function isAnalysisJob(value: unknown): value is AnalysisJob {
     !nonempty(value.snapshotId)
   )
     return false
+  if (value.progress !== undefined && value.progress !== null) {
+    const p = value.progress
+    if (!isRecord(p) || !['sources','images','requesting','retry_wait','validating'].includes(String(p.stage))
+      || typeof p.commentAreaDetected !== 'boolean'
+      || !['paragraphs','comments','images','imagesCompleted','imagesFailed','attempt','maxAttempts','retryAt'].every(k => Number.isSafeInteger(p[k]) && Number(p[k]) >= 0)
+      || Number(p.imagesCompleted) > Number(p.images) || Number(p.imagesFailed) > Number(p.imagesCompleted) || Number(p.attempt) > Number(p.maxAttempts)) return false
+  }
   if (value.status === 'completed') return true
   if (value.status === 'failed') return nonempty(value.error)
   if (value.status !== 'queued' && value.status !== 'running') return false

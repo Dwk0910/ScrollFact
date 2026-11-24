@@ -45,7 +45,31 @@ public class HtmlParser {
         }
         if (passages.isEmpty()) throw new ApiFailure(422, "no_passages", "분석할 문단을 찾지 못했습니다.");
         if (links.size() > 40) throw new ApiFailure(422, "too_many_sources", "본문에 연결된 출처가 40개를 초과했습니다. 출처 처리 범위 확장이 필요합니다.");
-        return new ParsedPage(List.copyOf(passages), List.copyOf(links));
+        var comments = CommentExtractor.extract(document);
+        var images = new ArrayList<ImageMaterial>();
+        for (Element img : scope.select("img")) {
+            if (excluded(img) || CommentExtractor.inside(img) || CommentExtractor.hidden(img) || decorativeImage(img)) continue;
+            String imageUrl = img.absUrl("data-scrollfact-image-src");
+            if (imageUrl.isBlank()) imageUrl = img.absUrl("data-src");
+            if (imageUrl.isBlank()) imageUrl = img.absUrl("src");
+            if (!imageUrl.startsWith("https://") && !imageUrl.startsWith("http://")) continue;
+            if (img.attr("role").equals("presentation")) continue;
+            String caption = img.attr("alt").trim();
+            Element figure = img.closest("figure");
+            if (figure != null && figure.selectFirst("figcaption") != null) caption = figure.selectFirst("figcaption").text();
+            if (images.size() >= 20) throw new ApiFailure(422, "too_many_images", "본문 이미지가 한 번에 처리할 수 있는 20개를 넘었습니다.");
+            images.add(new ImageMaterial("image-" + (images.size()+1), selector(img), imageUrl, caption));
+        }
+        return new ParsedPage(List.copyOf(passages), List.copyOf(links), comments, !document.select(CommentExtractor.AREAS).isEmpty() || !comments.isEmpty(), List.copyOf(images));
+    }
+    private boolean decorativeImage(Element image) {
+        if ("true".equals(image.attr("data-scrollfact-image-decorative"))) return true;
+        for (Element e = image; e != null; e = e.parent()) {
+            if (e.normalName().equals("button") || Set.of("button", "menu", "menubar", "navigation", "banner").contains(e.attr("role")) || e.hasAttr("data-ad-slot")) return true;
+            for (String token : e.classNames())
+                if (token.matches("(?i)(?:ad|ads|advertisement|advert|ad[-_].*)")) return true;
+        }
+        return false;
     }
     // Only a standalone email or a short reporter signature is unambiguously
     // contact metadata. A sentence mentioning an email must remain in the article.
@@ -59,7 +83,7 @@ public class HtmlParser {
     private record Segment(String selector, String text, List<String> links) { }
     private static String normalized(String text) { return text.replaceAll("[\\s\\u00a0]+", " ").trim(); }
     private boolean omit(Element e) {
-        return excluded(e) || Set.of("figure", "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "button", "textarea", "select").contains(e.normalName())
+        return excluded(e) || CommentExtractor.inside(e) || Set.of("figure", "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "button", "textarea", "select").contains(e.normalName())
             || (e.hasAttr("contenteditable") && !e.attr("contenteditable").equals("false"))
             || (Set.of("span", "a").contains(e.normalName()) && !e.select("img").isEmpty());
     }

@@ -40,18 +40,23 @@ public class GeminiReader {
     public Completion analyze(EvaluationInput input) throws Exception {
         if (!configured()) throw new ApiFailure(503, "reader_unconfigured", "서버에 Gemini API 키와 모델 설정이 필요합니다.");
         var data = Map.of("document", input.document(), "blocks", input.passages().stream()
-            .map(p -> Map.of("id", p.id(), "text", p.text())).toList(), "sources", input.sources().stream()
+            .map(p -> Map.of("id", p.id(), "text", p.text(), "sourceKind", p.id().startsWith("comment-") ? "comment" : p.id().startsWith("image-") ? "image" : "article")).toList(), "sources", input.sources().stream()
             .filter(SourceDocument::available).map(s -> Map.of("url", s.url(), "text", s.text())).toList());
         String content = mapper.writeValueAsString(data);
         if (content.length() > 120_000) throw new ApiFailure(422, "ai_input_too_large", "본문과 근거 자료가 이번 AI 처리 범위를 초과했습니다. 일부만 잘라 분석하지 않습니다.");
+        var parts = new ArrayList<Map<String, Object>>(); parts.add(Map.of("text", content));
+        for (var image : input.images()) {
+            parts.add(Map.of("text", "이미지 blockId=" + image.material().id() + (image.available() ? " · 다음 이미지의 보이는 내용만 설명하세요." : " · 이미지 접근 실패. 캡션만 주어졌으며 그림 내용을 추정하지 마세요.")));
+            if (image.available()) parts.add(Map.of("inlineData", Map.of("mimeType", image.mimeType(), "data", image.base64())));
+        }
         var body = Map.of("systemInstruction", Map.of("parts", List.of(Map.of("text", INSTRUCTIONS))),
-            "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", content)))),
+            "contents", List.of(Map.of("role", "user", "parts", parts)),
             "generationConfig", Map.of("responseMimeType", "application/json", "responseJsonSchema", schema(), "maxOutputTokens", 16000, "candidateCount", 1));
         var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(180))
             .header("x-goog-api-key", key).header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(body))).build();
         HttpResponse<byte[]> response;
-        try { response = GeminiRetry.send(model, timeout -> client.send(HttpRequest.newBuilder(request, (name, value) -> true).timeout(timeout).build(), info -> new LimitedBodySubscriber(2 * 1024 * 1024))); }
+        try { response = GeminiRetry.send(model, timeout -> client.send(HttpRequest.newBuilder(request, (name, value) -> true).timeout(timeout).build(), info -> new LimitedBodySubscriber(2 * 1024 * 1024)), Thread::sleep, System::nanoTime, input.progress()); }
         catch (java.io.IOException e) { throw ProviderFailure.transport("Gemini", model, e); }
         if (response.statusCode() != 200) throw ProviderFailure.response("Gemini", model, response.statusCode(), response.body());
         var envelope = mapper.readTree(response.body());
@@ -61,6 +66,7 @@ public class GeminiReader {
         StringBuilder json = new StringBuilder();
         for (var part : candidate.path("content").path("parts"))
             if (!part.path("thought").asBoolean(false) && part.has("text")) json.append(part.path("text").asText());
+        input.progress().accept(new AiProgress("validating", 0, 0, 0));
         Output output;
         try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); output = preserveParagraphs(output, input); }
         catch (ApiFailure e) { throw e; }

@@ -22,6 +22,7 @@ public class AnalysisService {
     private final ObjectMapper mapper;
     private final ThreadPoolExecutor workers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(8));
     private final ExecutorService sources = Executors.newFixedThreadPool(4);
+    private final ConcurrentMap<String, WorkProgress> details = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Future<?>> running = new ConcurrentHashMap<>();
     public AnalysisService(AnalysisRepository repository, AnalysisEvaluator evaluator, HtmlParser parser,
                            PublicSourceFetcher fetcher, ResultAssembler assembler, ObjectMapper mapper, ActiveReader reader) {
@@ -62,6 +63,7 @@ public class AnalysisService {
         catch (Exception e) { throw new ApiFailure(500, "invalid_stored_result", "저장된 결과를 읽지 못했습니다."); }
     }
     public synchronized void delete(String id) {
+        details.remove(id);
         Future<?> task = running.remove(id);
         if (task != null) task.cancel(true);
         workers.purge();
@@ -70,7 +72,7 @@ public class AnalysisService {
     private AnalysisEntity find(String id) { return repository.findById(id).orElseThrow(() -> new ApiFailure(404, "analysis_not_found", "분석이 없거나 만료되었습니다.")); }
     private JobView view(AnalysisEntity entity) {
         SourceProgress progress = entity.totalSources == null ? null : new SourceProgress(entity.completedSources, entity.totalSources, entity.failedSources);
-        return new JobView(entity.id, entity.snapshotId, entity.status, entity.phase, progress, entity.error);
+        return new JobView(entity.id, entity.snapshotId, entity.status, entity.phase, progress, entity.error, details.get(entity.id));
     }
     private synchronized void progress(String id, String phase, Integer total, int completed, int failed) {
         var entity = find(id);
@@ -98,6 +100,7 @@ public class AnalysisService {
         try {
             progress(id, "extracting", null, 0, 0);
             ParsedPage page = parser.parse(input.html(), input.metadata().url());
+            details.put(id, new WorkProgress("sources", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), 0, 0, 0, 0, 0));
             progress(id, "checking_sources", page.sourceUrls().size(), 0, 0);
             var completion = new ExecutorCompletionService<SourceDocument>(sources);
             for (String url : page.sourceUrls()) pending.add(completion.submit(() -> fetcher.fetch(url)));
@@ -119,14 +122,29 @@ public class AnalysisService {
             }
             progress(id, "summarizing", pending.size(), pending.size(), failed);
             if ("reader".equals(meta.mode())) {
-                var completionResult = selectedReader.analyze(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
-                var output = ReaderContract.preserveParagraphs(completionResult.output(), new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
-                var byId = new HashMap<String, ReaderModels.Block>();
-                output.blocks().forEach(b -> byId.put(b.id(), b));
-                var retained = page.passages(); // AI classification cannot change paragraph membership or order.
+                var imageInputs = new ArrayList<ImageInput>();
+                int imageBytes = 0, imageFailures = 0;
+                for (var image : page.images()) {
+                    if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+                    details.put(id, new WorkProgress("images", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), imageInputs.size(), imageFailures, 0, 0, 0));
+                    var data = fetcher.fetchImage(image);
+                    if (data.available() && imageBytes + data.base64().length() > 12_000_000) data = new ImageInput(image, "", "", "이번 요청의 전체 이미지 용량을 초과했어요");
+                    if (data.available()) imageBytes += data.base64().length(); else imageFailures++;
+                    imageInputs.add(data);
+                }
+                var allPassages = new ArrayList<>(page.passages()); allPassages.addAll(page.comments());
+                for (var image : page.images()) allPassages.add(new Passage(image.id(), image.selector(), image.caption().isBlank() ? "본문 이미지" : image.caption()));
+                details.put(id, new WorkProgress("requesting", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), imageInputs.size(), imageFailures, 1, 1, 0));
+                var evaluationInput = new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), List.copyOf(allPassages), List.copyOf(documents), List.copyOf(imageInputs), event -> {
+                    if (Thread.currentThread().isInterrupted()) throw new CancellationException();
+                    details.computeIfPresent(id, (key, value) -> value.ai(event));
+                });
+                var completionResult = selectedReader.analyze(evaluationInput);
+                var output = ReaderContract.preserveParagraphs(completionResult.output(), evaluationInput);
                 complete(id, new ReaderModels.Result("2.0", "reader", id, meta.snapshotId(), new DocumentInfo(meta.url(), meta.title()),
-                    meta.htmlBytes(), retained, retained.stream().map(p -> byId.get(p.id())).toList(), output.perspectives(),
-                    page.passages().size() - retained.size(), completionResult.model(), completionResult.inputTokens(), completionResult.outputTokens()));
+                    meta.htmlBytes(), page.passages(), output.blocks(), output.perspectives(), 0,
+                    completionResult.model(), completionResult.inputTokens(), completionResult.outputTokens(), page.comments(), page.commentAreaDetected(),
+                    imageInputs.stream().map(image -> new ImageResult(image.material().id(), image.material().selector(), image.material().url(), image.material().caption().isBlank() ? "본문 이미지" : image.material().caption(), image.available(), image.failure())).toList()));
                 return;
             }
             Evaluation evaluation = evaluator.evaluate(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));

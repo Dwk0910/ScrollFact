@@ -37,16 +37,22 @@ public class OpenAiReader {
     public Completion analyze(EvaluationInput input) throws Exception {
         if (!configured()) throw new ApiFailure(503, "reader_unconfigured", "설정에서 OpenAI 연결 상태를 확인해 주세요. 서버에 API 키와 모델 설정이 필요합니다.");
         var data = Map.of("document", input.document(), "blocks", input.passages().stream()
-            .map(p -> Map.of("id", p.id(), "text", p.text())).toList(), "sources", input.sources().stream()
+            .map(p -> Map.of("id", p.id(), "text", p.text(), "sourceKind", p.id().startsWith("comment-") ? "comment" : p.id().startsWith("image-") ? "image" : "article")).toList(), "sources", input.sources().stream()
             .filter(SourceDocument::available).map(s -> Map.of("url", s.url(), "text", s.text())).toList());
         String content = mapper.writeValueAsString(data);
         if (content.length() > 120_000) throw new ApiFailure(422, "ai_input_too_large", "본문과 근거 자료가 이번 AI 처리 범위를 초과했습니다. 일부만 잘라 분석하지 않습니다.");
+        var parts = new ArrayList<Map<String, Object>>(); parts.add(Map.of("type", "input_text", "text", content));
+        for (var image : input.images()) {
+            parts.add(Map.of("type", "input_text", "text", "이미지 blockId=" + image.material().id() + (image.available() ? " · 다음 이미지의 보이는 내용만 설명하세요." : " · 이미지 접근 실패. 캡션만 주어졌으며 그림 내용을 추정하지 마세요.")));
+            if (image.available()) parts.add(Map.of("type", "input_image", "image_url", "data:" + image.mimeType() + ";base64," + image.base64()));
+        }
         var requestBody = Map.of("model", model, "store", false, "max_output_tokens", 16000,
-            "instructions", INSTRUCTIONS, "input", content,
+            "instructions", INSTRUCTIONS, "input", input.images().isEmpty() ? content : List.of(Map.of("role", "user", "content", parts)),
             "text", Map.of("format", Map.of("type", "json_schema", "name", "scrollfact_reader", "strict", true, "schema", schema())));
         var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(180))
             .header("Authorization", "Bearer " + key).header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofByteArray(mapper.writeValueAsBytes(requestBody))).build();
+        input.progress().accept(new AiProgress("requesting", 1, 1, 0));
         var response = client.send(request, info -> new LimitedBodySubscriber(2 * 1024 * 1024));
         if (response.statusCode() != 200) {
             String detail = switch(response.statusCode()) {
@@ -65,6 +71,7 @@ public class OpenAiReader {
             if ("output_text".equals(part.path("type").asText())) json.append(part.path("text").asText());
         }
         if (json.isEmpty()) throw invalid();
+        input.progress().accept(new AiProgress("validating", 0, 0, 0));
         Output output;
         try { output = mapper.readValue(json.toString(), Output.class); validate(output, input); output = preserveParagraphs(output, input); }
         catch (ApiFailure e) { throw e; }

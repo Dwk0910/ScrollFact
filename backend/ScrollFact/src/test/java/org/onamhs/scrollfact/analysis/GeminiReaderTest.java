@@ -36,13 +36,18 @@ class GeminiReaderTest {
         }); server.start();
         try {
             var reader = new GeminiReader("test-secret", "test-model", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/responses"), mapper);
-            var result = reader.analyze(input);
+            var events = new ArrayList<AiProgress>();
+            var image = new ImageInput(new ImageMaterial("image-1", "img", "https://example.org/a.png", "설명"), "image/png", "aW1hZ2U=", null);
+            var result = reader.analyze(new EvaluationInput(input.document(), input.passages(), input.sources(), List.of(image), events::add));
+            assertThat(events).extracting(AiProgress::stage).containsExactly("requesting", "retry_wait", "requesting", "validating");
             assertThat(attempts.get()).isEqualTo(2);
             assertThat(result.inputTokens()).isEqualTo(123); assertThat(result.outputTokens()).isEqualTo(45);
             var request = mapper.readTree(received.get());
             assertThat(request.at("/generationConfig/responseMimeType").asText()).isEqualTo("application/json");
             assertThat(request.at("/generationConfig/responseJsonSchema/properties/blocks").isObject()).isTrue();
             assertThat(request.at("/contents/0/parts/0/text").asText()).doesNotContain("selector", "article > p");
+            assertThat(request.at("/contents/0/parts/2/inlineData/mimeType").asText()).isEqualTo("image/png");
+            assertThat(request.at("/contents/0/parts/2/inlineData/data").asText()).isEqualTo("aW1hZ2U=");
             assertThat(auth.get()).isEqualTo("test-secret");
             assertThat(mapper.writeValueAsString(reader.status())).doesNotContain("test-secret");
             output.set("{\"candidates\":[{\"finishReason\":\"MAX_TOKENS\"}]}");

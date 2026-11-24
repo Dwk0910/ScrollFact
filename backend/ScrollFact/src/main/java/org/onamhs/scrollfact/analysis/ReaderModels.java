@@ -14,6 +14,6 @@ public final class ReaderModels {
     public record Result(String schemaVersion, String kind, String analysisId, String snapshotId,
                          DocumentInfo document, long htmlBytes, List<Passage> passages,
                          List<Block> blocks, List<Perspective> perspectives, int excludedBlocks,
-                         String model, long inputTokens, long outputTokens) {}
+                         String model, long inputTokens, long outputTokens, List<Passage> comments, boolean commentAreaDetected, List<ImageResult> images) {}
     public record Completion(Output output, String model, long inputTokens, long outputTokens) {}
 }

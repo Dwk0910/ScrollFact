@@ -38,5 +38,17 @@ export function sourceSegments(element: HTMLElement): SourceSegment[] {
   })
 }
 export function sourceText(element: HTMLElement): string {
-  return normalizeSource(sourceSegments(element).map(s => s.text).join(' '))
+  const parts: string[] = []
+  function visit(node: Node) {
+    if (node instanceof Text) { parts.push(node.data); return }
+    if (!(node instanceof HTMLElement) || node.matches(excluded)) return
+    const style = node.style
+    if (style.display === 'none' || style.visibility === 'hidden') return
+    const boundary = blocks.has(node.localName) || node.localName === 'br'
+    if (boundary) parts.push(' ')
+    node.childNodes.forEach(visit)
+    if (boundary) parts.push(' ')
+  }
+  visit(element)
+  return normalizeSource(parts.join(''))
 }

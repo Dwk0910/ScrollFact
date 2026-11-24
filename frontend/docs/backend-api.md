@@ -1,10 +1,28 @@
 # ScrollFact REST API · v1
 
-> 최신 확장은 `mode: reader`로 OpenAI 분석을 요청합니다. 서버의 `OPENAI_API_KEY`·`SCROLLFACT_OPENAI_MODEL` 설정이 필요합니다. 아래 diagnostic 설명은 전송 점검 모드에 해당합니다. 실행 및 schemaVersion 2.0 계약은 [OpenAI 안내](../../docs/development/openai-reader.md)를 참고하세요.
+> 최신 확장은 `mode: reader`로 설정에서 선택한 OpenAI/Gemini 분석을 요청합니다. 로컬 프로필에 저장한 키·모델 또는 서버 환경 설정을 사용합니다. 아래 diagnostic 설명은 전송 점검 모드에 해당합니다. 실행 및 schemaVersion 2.0 계약은 [OpenAI 안내](../../docs/development/openai-reader.md)를 참고하세요.
 
 기계 판독용 계약: [OpenAPI 3.1](../../backend/ScrollFact/src/main/resources/static/openapi.yaml). 구현: Spring Boot + SQLite. AI 제공자는 `AnalysisEvaluator` 인터페이스로 교체한다.
 
-프론트엔드는 사용자가 분석 버튼을 누를 때 **현재 원문의 `document.documentElement.outerHTML` 전체**를 전달한다. 문단 분리, 요약, 주장 추출, 점수 산출, 판정, 근거 선택, watch 대상 결정은 모두 백엔드 책임이다. 프론트는 응답을 검증·표시하고 지정된 DOM 요소의 위치만 감지한다.
+프론트엔드는 사용자가 분석 버튼을 누를 때 **현재 DOM 구조를 보존하고 입력값·스크립트 텍스트 등을 제거한 스냅샷**을 전달한다. 문단 분리, 요약, 주장 추출, 점수 산출, 판정, 근거 선택, watch 대상 결정은 모두 백엔드 책임이다. 프론트는 응답을 검증·표시하고 지정된 DOM 요소의 위치만 감지한다.
+
+## 리더 댓글·이미지 및 상세 진행 상태 (2026-11-24)
+
+`mode: reader`는 설정에서 선택한 OpenAI/Gemini로 요청한다. 업로드는 현재 DOM을 XMLSerializer로 보존한 `<!--scrollfact-dom-v1-->` 스냅샷이며 gzip으로 전달한다. 아래 기존 점수 분석 계약과 구분한다.
+
+작업 조회의 선택적 `progress` 필드:
+
+- `stage`: `sources`, `images`, `requesting`, `retry_wait`, `validating`.
+- `paragraphs`, `comments`, `images`: 추출한 기사 문단·불러온 댓글·본문 이미지 수.
+- `commentAreaDetected`: 댓글 영역 존재 여부. 댓글 본문 수가 0일 수도 있다.
+- `imagesCompleted`, `imagesFailed`: 이미지 준비 완료(실패 포함), 실패 수.
+- `attempt`, `maxAttempts`, `retryAt`: 실제 AI 요청 횟수·최대 횟수·재시도 예정 Unix 밀리초. 미요청 또는 검증 단계는 0.
+
+기존 `sources`는 본문에 연결된 외부 URL 처리 수이며 웹 검색/댓글/이미지 수가 아니다. 작업을 삭제하면 상세 상태도 삭제한다.
+
+리더 결과(`schemaVersion: 2.0`)는 기존 `passages`를 기사 문단만으로 유지하며 `comments: {id, selector, text}[]`, `commentAreaDetected`, `images: {id, selector, url, caption, included, failure}[]`를 추가한다. `blocks`는 기사·댓글·이미지의 모든 ID를 포함한다. `included`는 실제 이미지 바이트를 AI 입력에 넣었는지 뜻한다. 실패 시 캡션만 전달하며 사유를 표시한다. 원문 이동 대상은 세 배열을 합치되 이미지에는 텍스트 일치 조건을 쓰지 않는다. 관점 entries는 실제 기사/댓글 문장에만 연결한다.
+
+댓글은 DOM에 불러온 본문만 최대200개/10만 자. 이미지 최대20개, JPEG/PNG/WebP, 개별2MiB 및 전체 base64 12MB. 용량·형식·접근 실패는 명시적으로 반환한다. 이미지 링크 자체를 외부 사실 검증 근거로 취급하지 않는다. 현재 CSS 배경/캔버스/iframe 내부 수집은 지원하지 않는다.
 
 ## 리소스와 HTTP 의미
 
