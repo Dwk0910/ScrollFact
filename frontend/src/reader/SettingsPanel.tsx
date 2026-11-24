@@ -5,14 +5,14 @@ import AiConnection from './AiConnection'
 import { ChevronLeft, ChevronRight, X, Cpu, SlidersHorizontal, AlignLeft, Check } from 'lucide-react'
 
 type Preferences = { server: string; follow: boolean; mode: 'reader' | 'diagnostic' }
-type Props = { profile: Profile | null; updateProfile: (p: Profile | null) => void; preferences: Preferences; change: (next: Partial<Preferences>) => void; busy: boolean; checking: boolean; connection: string; saveNotice: string; checkConnection: () => Promise<void>; close: () => void }
+type Props = { initialPage?: Page; profile: Profile | null; updateProfile: (p: Profile | null) => void; preferences: Preferences; change: (next: Partial<Preferences>) => void; busy: boolean; checking: boolean; connection: string; saveNotice: string; checkConnection: () => Promise<void>; close: () => void }
 type Page = 'home' | 'account' | 'ai' | 'reading' | 'advanced'
 const titles: Record<Page, string> = { home: '설정', account: '계정', ai: 'AI 연결', reading: '읽기 동작', advanced: '고급 설정' }
 function Row({ icon, title, value, onClick }: { icon: ReactNode; title: string; value: string; onClick: () => void }) {
   return <button className="settings-nav-row" onClick={onClick}><span className="settings-row-icon">{icon}</span><span>{title}</span><span className="settings-value">{value}</span><ChevronRight size={15} aria-hidden="true" /></button>
 }
-export default function SettingsPanel({ profile, updateProfile, preferences, change, busy, checking, connection, saveNotice, checkConnection, close }: Props) {
-  const [page, setPage] = useState<Page>('home')
+export default function SettingsPanel({ initialPage = 'home', profile, updateProfile, preferences, change, busy, checking, connection, saveNotice, checkConnection, close }: Props) {
+  const [page, setPage] = useState<Page>(initialPage)
   const [server, setServer] = useState(preferences.server)
   const [error, setError] = useState('')
   const title = useRef<HTMLHeadingElement>(null)

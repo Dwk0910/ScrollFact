@@ -1,4 +1,5 @@
-import { ParagraphTarget, paragraphRange } from './paragraphTarget'
+import { normalizeSource, sourceSegments, sourceText } from './sourceSegments'
+import { ParagraphTarget } from './paragraphTarget'
 import { serializeUpload } from './snapshot'
 import {
   isRecord,
@@ -93,7 +94,9 @@ export function mountContentController(host: ContentHost) {
     return `<!DOCTYPE html>\n${clone.outerHTML}`
   }
 
-  function matchElement(selector: string): HTMLElement | ParagraphTarget | null {
+  const textOf = (element: HTMLElement | ParagraphTarget) => element instanceof ParagraphTarget ? normalizeSource(element.textContent) : sourceText(element)
+
+  function matchElement(selector: string, expected?: string): HTMLElement | ParagraphTarget | null {
     try {
       const part = selector.match(/::sf-paragraph\((\d+)\)$/)
       const matches = document.querySelectorAll(part ? selector.slice(0, part.index) : selector)
@@ -108,8 +111,14 @@ export function mountContentController(host: ContentHost) {
       )
         return null
       if (part) {
-        const range = paragraphRange(element, Number(part[1]))
-        return range ? new ParagraphTarget(element, range) : null
+        const segments = sourceSegments(element)
+        let segment = segments[Number(part[1])]
+        if (expected !== undefined && segment?.text !== normalizeSource(expected)) {
+          const matches = segments.filter(s => s.text === normalizeSource(expected))
+          if (matches.length !== 1) return null
+          segment = matches[0]
+        }
+        return segment ? new ParagraphTarget(element, segment.range, segment.text) : null
       }
       return element
     } catch {
@@ -141,14 +150,14 @@ export function mountContentController(host: ContentHost) {
     const originalText = new Map<string, string>()
     const matchedElements = new Set<HTMLElement | ParagraphTarget>()
     for (const spec of specs) {
-      const element = matchElement(spec.selector)
-      if (!element || matchedElements.has(element) || (spec.text !== undefined && (element.textContent ?? '').replace(/\s+/g, ' ').trim() !== spec.text.replace(/\s+/g, ' ').trim())) {
+      const element = matchElement(spec.selector, spec.text)
+      if (!element || matchedElements.has(element) || (spec.text !== undefined && textOf(element) !== normalizeSource(spec.text))) {
         unmatchedIds.push(spec.id)
         continue
       }
       matchedElements.add(element)
       targets.set(spec.id, element)
-      originalText.set(spec.id, element.textContent ?? '')
+      originalText.set(spec.id, textOf(element))
     }
 
     let frame = 0
@@ -217,9 +226,9 @@ export function mountContentController(host: ContentHost) {
         if (!snapshot) return
         for (const spec of specs) {
           if (!originalText.has(spec.id)) continue
-          const element = matchElement(spec.selector)
+          const element = matchElement(spec.selector, spec.text)
           const previous = targets.get(spec.id)
-          if (element && element.textContent !== originalText.get(spec.id)) {
+          if (element && textOf(element) !== originalText.get(spec.id)) {
             resetSnapshot()
             emit({ type: MessageType.documentChanged })
             return

@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 const {chromium}=await import(process.env.SCROLLFACT_PLAYWRIGHT_MODULE||'playwright');
 const completion=JSON.parse(await fs.readFile(process.env.SCROLLFACT_RESULT,'utf8'));
 const original=JSON.parse(await fs.readFile(process.env.SCROLLFACT_PASSAGES,'utf8'));
-const blocks=completion.output.blocks.filter(b=>b.kind!=='auxiliary');
-const result={schemaVersion:'2.0',kind:'reader',analysisId:'quality-test',snapshotId:'quality-snapshot',document:{url:'https://www.etnews.com/20261103000313',title:'전자신문 멘토링 기사'},htmlBytes:40,passages:original.filter(p=>blocks.some(b=>b.id===p.id)),blocks,perspectives:completion.output.perspectives,excludedBlocks:original.length-blocks.length,model:completion.model,inputTokens:completion.inputTokens,outputTokens:completion.outputTokens};
+const blocks=(completion.output?.blocks || completion.blocks).filter(b=>b.kind!=='auxiliary');
+const result={schemaVersion:'2.0',kind:'reader',analysisId:'quality-test',snapshotId:'quality-snapshot',document:{url:'https://www.etnews.com/20261103000313',title:'전자신문 멘토링 기사'},htmlBytes:40,passages:original.filter(p=>blocks.some(b=>b.id===p.id)),blocks,perspectives:(completion.output?.perspectives || completion.perspectives),excludedBlocks:original.length-blocks.length,model:completion.model,inputTokens:completion.inputTokens,outputTokens:completion.outputTokens};
 const browser=await chromium.launch({executablePath:process.env.SCROLLFACT_BROWSER_PATH,headless:true});
 try{
  const page=await browser.newPage({viewport:{width:440,height:1000}});
@@ -25,7 +25,17 @@ try{
  assert.ok(await page.getByText('확인하지 않음',{exact:true}).count()>0);
  assert.equal(await page.getByText('확인 자료 부족',{exact:true}).count(),0);
  for(let i=0;i<5;i++)await page.getByRole('button',{name:'다음 문단',exact:true}).click();
- assert.ok((await page.locator('.explanation').innerText()).includes('챙겨드림'));
+ assert.ok((await page.locator('.reading-context').innerText()).includes('챙겨드림'));
+ assert.equal(await page.locator('.article-evidence').getAttribute('open'),null);
+ assert.equal(await page.locator('.original').getAttribute('open'),null);
+ assert.equal(await page.locator('.original blockquote').textContent(),result.passages[5].text);
+ assert.equal(await page.locator('.original blockquote').isVisible(),false);
+ assert.ok(await page.locator('.reading-context').evaluate(e=>!!(e.compareDocumentPosition(document.querySelector('.original')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+ assert.equal(await page.locator('.context>.section-title h2').innerText(),'현재 문단');
+ await page.locator('.article-evidence>summary').click();
+ assert.equal(await page.locator('.paragraph-judgments .check').count(),blocks[5].checks.length);
+ assert.ok(await page.locator('.paragraph-judgments').isVisible());
+ await page.locator('.article-evidence>summary').click();
  await page.screenshot({path:'/private/tmp/sf-live-qa/reader.png',fullPage:true});
  console.log('PASS: actual AI output, 10 paragraphs, collapsed opinions, no gauge, unverified label, navigation');
 }finally{await browser.close();}

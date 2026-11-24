@@ -3,9 +3,10 @@
 export class ParagraphTarget {
   readonly element: HTMLElement
   readonly range: Range
-  constructor(element: HTMLElement, range: Range) { this.element = element; this.range = range }
+  readonly sourceText: string
+  constructor(element: HTMLElement, range: Range, sourceText = range.toString()) { this.element = element; this.range = range; this.sourceText = sourceText }
   get isConnected() { return this.element.isConnected }
-  get textContent() { return this.range.toString() }
+  get textContent() { return this.sourceText }
   getClientRects() { return this.range.getClientRects() }
   getBoundingClientRect() { return this.range.getBoundingClientRect() }
   private active = false
@@ -48,26 +49,4 @@ export class ParagraphTarget {
   scrollIntoView(options: ScrollIntoViewOptions) {
     window.scrollBy({ top: this.range.getBoundingClientRect().top - window.innerHeight * .45, behavior: options.behavior })
   }
-}
-
-export function paragraphRange(element: HTMLElement, index: number): Range | null {
-  const breaks = Array.from(element.querySelectorAll('br'))
-  const boundaries: { first: HTMLBRElement; last: HTMLBRElement }[] = []
-  for (let i = 0; i < breaks.length; i++) {
-    const first = breaks[i]
-    let last = first
-    while (i + 1 < breaks.length) {
-      let next: ChildNode | null = last.nextSibling
-      while (next?.nodeType === Node.TEXT_NODE && !next.textContent?.trim()) next = next.nextSibling
-      if (next !== breaks[i + 1]) break
-      last = breaks[++i]
-    }
-    if (last !== first) boundaries.push({ first, last })
-  }
-  if (!boundaries.length || index < 0 || index > boundaries.length) return null
-  const range = document.createRange()
-  range.selectNodeContents(element)
-  if (index > 0) range.setStartAfter(boundaries[index - 1].last)
-  if (index < boundaries.length) range.setEndBefore(boundaries[index].first)
-  return range
 }

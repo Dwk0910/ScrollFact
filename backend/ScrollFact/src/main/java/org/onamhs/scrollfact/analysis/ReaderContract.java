@@ -14,6 +14,10 @@ final class ReaderContract {
         body/opinion에는 제목과 자연스러운 문단 해설을 작성한다. 해설을 순서대로 읽으면 글의 흐름을 알 수 있어야 한다.
         독자는 이 주제를 처음 읽는 사람이다. summary와 reason은 친절하고 차분한 한국어 해요체로 쓴다.
         명사만 나열하거나 '진행되었다/부여했다' 같은 보고서 문체를 피하고 주어와 행동이 분명한 문장을 쓴다.
+        summary와 reason에는 Markdown을 쓸 수 있다. 중요한 핵심어만 **굵게** 강조한다.
+        서로 다른 내용을 설명할 때는 빈 줄로 문단을 나눈다. 비교 가능한 사례·절차가 3개 이상이면 목록으로 정리한다.
+        목록 앞뒤에 실제 관계를 설명하는 문장을 남겨 서사를 유지하고, 형식을 위해 내용을 생략하지 마라.
+        HTML, 이미지, 임의 링크, 문서 전체를 감싼 코드 블록은 쓰지 마라. title과 원문 quote는 Markdown 없는 일반 텍스트다.
         긴 문장은 의미 단위로 나누되 사실·조건을 생략하지 마라. 각 문단 첫 문장에서 무엇을 설명하는지 알 수 있게 한다.
         앞 문단의 배경·구체화·예시·후속 일정 중 실제 관계에 맞춰 자연스럽게 이어간다.
         '또/더 나아가/따라서'를 기계적으로 반복하거나 원문에 없는 인과관계·평가를 추가하지 마라.
@@ -99,7 +103,7 @@ final class ReaderContract {
     static Map<String, Object> schema() {
         var evidence = object(Map.of("url", string(), "quote", string()));
         var check = object(Map.of("quote", string(), "status", Map.of("type", "string", "enum", List.of("supported", "contradicted", "contested", "needs_verification", "opinion")), "reason", string(), "evidence", array(evidence)));
-        var block = object(Map.of("id", string(), "kind", Map.of("type", "string", "enum", List.of("body", "opinion")), "title", string(), "summary", Map.of("type", "string", "description", "필드 이름은 summary이지만 짧은 요약이 아니다. 원문의 각 문장에 있는 인명·기관·날짜·수치·조건·기능·사례를 생략하지 않고 처음 읽는 독자에게 설명하는 충분한 길이의 재서술. 자연스러운 해요체(~예요, ~했어요, ~해요)를 사용하고 ~했다/~한다 보고서 말투를 사용하지 않는다."), "checks", array(check)));
+        var block = object(Map.of("id", string(), "kind", Map.of("type", "string", "enum", List.of("body", "opinion")), "title", string(), "summary", Map.of("type", "string", "description", "필드 이름은 summary이지만 짧은 요약이 아니다. 원문의 각 문장에 있는 인명·기관·날짜·수치·조건·기능·사례를 생략하지 않고 처음 읽는 독자에게 설명하는 충분한 길이의 재서술. 빈 줄로 문단을 나누고 핵심어 **강조**, 필요한 경우 Markdown 목록으로 읽기 쉽게 구성한다. 자연스러운 해요체(~예요, ~했어요, ~해요)를 사용하고 ~했다/~한다 보고서 말투를 사용하지 않는다."), "checks", array(check)));
         var entry = object(Map.of("blockId", string(), "quote", string(), "reason", string()));
         return object(Map.of("blocks", array(block), "perspectives", array(object(Map.of("label", string(), "entries", array(entry))))));
     }

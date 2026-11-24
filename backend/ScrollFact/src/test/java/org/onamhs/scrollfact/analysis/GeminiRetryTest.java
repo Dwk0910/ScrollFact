@@ -20,33 +20,48 @@ class GeminiRetryTest {
     @Test void recoversWithBoundedIncreasingDelays() throws Exception {
         var count = new AtomicInteger();
         var delays = new ArrayList<Long>();
-        var result = GeminiRetry.send("test-model", () -> response(count.incrementAndGet() < 3 ? 503 : 200), delays::add);
+        var result = GeminiRetry.send("test-model", timeout -> response(count.incrementAndGet() < 3 ? 503 : 200), delays::add);
         assertThat(result.statusCode()).isEqualTo(200);
         assertThat(count.get()).isEqualTo(3);
         assertThat(delays).hasSize(2);
         assertThat(delays.get(0)).isBetween(1000L, 1250L);
         assertThat(delays.get(1)).isBetween(2000L, 2250L);
     }
-    @Test void stopsAfterThreeFailuresAndReportsSafeDetail() {
+    @Test void stopsAfterSixFailuresAndReportsSafeDetail() {
         var count = new AtomicInteger();
-        assertThatThrownBy(() -> GeminiRetry.send("test-model", () -> { count.incrementAndGet(); return response(503); }, ms -> {}))
-            .isInstanceOf(ApiFailure.class).hasMessageContaining("총 3회").hasMessageContaining("503")
+        assertThatThrownBy(() -> GeminiRetry.send("test-model", timeout -> { count.incrementAndGet(); return response(503); }, ms -> {}))
+            .isInstanceOf(ApiFailure.class).hasMessageContaining("총 6회").hasMessageContaining("503")
             .hasMessageNotContaining("secret upstream text");
-        assertThat(count.get()).isEqualTo(3);
+        assertThat(count.get()).isEqualTo(6);
     }
     @Test void doesNotRetryOtherStatusesOrTransportFailures() throws Exception {
         for (int status : new int[]{200, 400, 401, 403, 404, 429, 500}) {
             var count = new AtomicInteger();
-            assertThat(GeminiRetry.send("test-model", () -> { count.incrementAndGet(); return response(status); }, ms -> { throw new AssertionError(); }).statusCode()).isEqualTo(status);
+            assertThat(GeminiRetry.send("test-model", timeout -> { count.incrementAndGet(); return response(status); }, ms -> { throw new AssertionError(); }).statusCode()).isEqualTo(status);
             assertThat(count.get()).isEqualTo(1);
         }
-        assertThatThrownBy(() -> GeminiRetry.send("test-model", () -> { throw new IOException(); }, ms -> { throw new AssertionError(); }))
+        assertThatThrownBy(() -> GeminiRetry.send("test-model", timeout -> { throw new IOException(); }, ms -> { throw new AssertionError(); }))
             .isInstanceOf(IOException.class);
     }
     @Test void cancellationDuringBackoffStopsBeforeNextRequest() {
         var count = new AtomicInteger();
-        assertThatThrownBy(() -> GeminiRetry.send("test-model", () -> { count.incrementAndGet(); return response(503); }, ms -> { throw new InterruptedException(); }))
+        assertThatThrownBy(() -> GeminiRetry.send("test-model", timeout -> { count.incrementAndGet(); return response(503); }, ms -> { throw new InterruptedException(); }))
             .isInstanceOf(InterruptedException.class);
         assertThat(count.get()).isEqualTo(1);
+    }
+    @Test void requestTimeoutShrinksToRemainingTotalBudget() throws Exception {
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        var timeouts = new ArrayList<java.time.Duration>();
+        var count = new AtomicInteger();
+        assertThatThrownBy(() -> GeminiRetry.send("test-model", timeout -> {
+            timeouts.add(timeout);
+            count.incrementAndGet();
+            clock.addAndGet(java.time.Duration.ofSeconds(170).toNanos());
+            return response(503);
+        }, ms -> clock.addAndGet(java.time.Duration.ofMillis(ms).toNanos()), clock::get))
+            .isInstanceOf(ApiFailure.class).hasMessageContaining("총 2회");
+        assertThat(timeouts.get(0)).isEqualTo(java.time.Duration.ofSeconds(180));
+        assertThat(timeouts.get(1).toSeconds()).isBetween(68L, 69L);
+        assertThat(count.get()).isEqualTo(2);
     }
 }

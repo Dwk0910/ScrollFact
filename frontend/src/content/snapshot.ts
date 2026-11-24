@@ -15,5 +15,6 @@ export function serializeUpload(document: Document): string {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
     while (walker.nextNode()) walker.currentNode.textContent = ''
   }
-  return `<!DOCTYPE html>\n${clone.outerHTML}`
+  // XML keeps script-inserted block children inside p intact on the server.
+  return `<!--scrollfact-dom-v1-->${new XMLSerializer().serializeToString(clone)}`
 }

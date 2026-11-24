@@ -5,46 +5,46 @@ import java.util.*;
 import java.net.URI;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.parser.Parser;
 import org.springframework.stereotype.Component;
 
 @Component
 public class HtmlParser {
     private static final Set<String> EXCLUDED = Set.of("script", "style", "noscript", "nav", "header", "footer", "aside", "iframe", "form");
     public ParsedPage parse(String html, String url) {
-        var document = Jsoup.parse(html, url);
+        // XML serialization preserves the browser DOM, even if scripts inserted a div inside p.
+        var document = html.startsWith("<!--scrollfact-dom-v1-->")
+            ? Jsoup.parse(html, url, Parser.xmlParser()) : Jsoup.parse(html, url);
         var scope = contentRoot(document);
         var passages = new ArrayList<Passage>();
         var links = new LinkedHashSet<String>();
         int characters = 0;
-        // Never mutate the DOM before deriving selectors: nth-of-type must match the source.
-        for (var element : scope.select("p, li, blockquote")) {
-            if (excluded(element) || element.children().stream().anyMatch(e -> !e.select("p, li, blockquote").isEmpty())) continue;
-            var chunks = paragraphTexts(element);
-            for (int part = 0; part < chunks.size(); part++) {
-                String text = chunks.get(part);
-                if (text.isEmpty() || isContactSignature(text)) continue;
-                characters += text.length();
-                if (passages.size() >= 200 || characters > 200_000)
-                    throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
-                passages.add(new Passage("section-" + (passages.size() + 1), selector(element)
-                    + (chunks.size() > 1 ? "::sf-paragraph(" + part + ")" : ""), text));
+        // Traverse direct prose as well as p/li: many publishers use article + br.
+        var segments = new ArrayList<Segment>();
+        collect(scope, segments);
+        for (var segment : segments) {
+            String text = segment.text();
+            if (text.isEmpty() || isContactSignature(text)) continue;
+            characters += text.length();
+            if (passages.size() >= 200 || characters > 200_000)
+                throw new ApiFailure(422, "document_too_complex", "선택한 본문 영역이 문단 200개 또는 20만 자를 초과했습니다. 본문 영역을 올바르게 인식했는지 확인이 필요합니다.");
+            passages.add(new Passage("section-" + (passages.size() + 1), segment.selector(), text));
+            for (var link : segment.links()) {
+                try {
+                    URI uri = URI.create(link).normalize();
+                    if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null) continue;
+                    String canonical = uri.getScheme().toLowerCase() + "://" + uri.getHost().toLowerCase()
+                        + (uri.getPort() == -1 ? "" : ":" + uri.getPort())
+                        + (uri.getRawPath().isEmpty() ? "/" : uri.getRawPath())
+                        + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
+                    if (!canonical.equals(url.split("#", 2)[0])) links.add(canonical);
+                } catch (IllegalArgumentException ignored) { }
             }
         }
         if (passages.isEmpty()) throw new ApiFailure(422, "no_passages", "분석할 문단을 찾지 못했습니다.");
-        for (var link : scope.select("a[href]")) {
-            if (excluded(link) || link.text().isBlank() || link.closest("figure") != null) continue;
-            try {
-                URI uri = URI.create(link.absUrl("href")).normalize();
-                if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null) continue;
-                String canonical = uri.getScheme().toLowerCase() + "://" + uri.getHost().toLowerCase()
-                    + (uri.getPort() == -1 ? "" : ":" + uri.getPort())
-                    + (uri.getRawPath().isEmpty() ? "/" : uri.getRawPath())
-                    + (uri.getRawQuery() == null ? "" : "?" + uri.getRawQuery());
-                if (canonical.equals(url.split("#", 2)[0])) continue;
-                links.add(canonical);
-                if (links.size() > 40) throw new ApiFailure(422, "too_many_sources", "외부 출처 링크 40개 상한을 초과했습니다. 일부만 확인하지 않습니다.");
-            } catch (IllegalArgumentException ignored) { }
-        }
+        if (links.size() > 40) throw new ApiFailure(422, "too_many_sources", "본문에 연결된 출처가 40개를 초과했습니다. 출처 처리 범위 확장이 필요합니다.");
         return new ParsedPage(List.copyOf(passages), List.copyOf(links));
     }
     // Only a standalone email or a short reporter signature is unambiguously
@@ -54,10 +54,65 @@ public class HtmlParser {
             || text.matches("[가-힣A-Za-z· .-]{1,40} 기자\\s+[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
     }
 
-    // Blank lines delimit paragraphs; a single line break (address/verse) does not.
-    static List<String> paragraphTexts(Element element) {
-        String[] parts = element.html().split("(?i)<br\\s*/?>(?:[\\s\\u00a0]*<br\\s*/?>)+", -1);
-        return Arrays.stream(parts).map(part -> Jsoup.parseBodyFragment(part).body().text().trim()).toList();
+    // Shared block/inline boundary rules with content/sourceSegments.ts. No host-specific selectors.
+    private static final Set<String> BLOCKS = Set.of("address", "article", "aside", "blockquote", "div", "dl", "dt", "dd", "fieldset", "figcaption", "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "table", "tbody", "thead", "tr", "td", "th", "ul");
+    private record Segment(String selector, String text, List<String> links) { }
+    private static String normalized(String text) { return text.replaceAll("[\\s\\u00a0]+", " ").trim(); }
+    private boolean omit(Element e) {
+        return excluded(e) || Set.of("figure", "figcaption", "h1", "h2", "h3", "h4", "h5", "h6", "button", "textarea", "select").contains(e.normalName())
+            || (e.hasAttr("contenteditable") && !e.attr("contenteditable").equals("false"))
+            || (Set.of("span", "a").contains(e.normalName()) && !e.select("img").isEmpty());
+    }
+    private void collect(Element element, List<Segment> output) {
+        if (omit(element)) return;
+        var inline = new ArrayList<Node>();
+        flatten(element, inline);
+        var chunks = new ArrayList<List<Node>>();
+        var current = new ArrayList<Node>();
+        int breaks = 0;
+        for (Node node : inline) {
+            if (node instanceof Element e && !e.normalName().equals("br")) {
+                chunks.add(current); current = new ArrayList<>();
+                chunks.add(List.of(e)); breaks = 0;
+            } else if (node instanceof Element) {
+                if (++breaks == 2) { chunks.add(current); current = new ArrayList<>(); }
+                else current.add(node);
+            } else {
+                current.add(node);
+                if (!normalized(((TextNode) node).getWholeText()).isEmpty()) breaks = 0;
+            }
+        }
+        chunks.add(current);
+        int index = 0;
+        boolean whole = chunks.size() == 1 && !chunks.get(0).stream().anyMatch(n -> n instanceof Element e && !e.normalName().equals("br"));
+        for (var chunk : chunks) {
+            if (chunk.size() == 1 && chunk.get(0) instanceof Element e && !e.normalName().equals("br")) { collect(e, output); continue; }
+            StringBuilder text = new StringBuilder();
+            var links = new LinkedHashSet<String>();
+            for (Node node : chunk) {
+                if (node instanceof TextNode t) {
+                    text.append(t.getWholeText());
+                    Element anchor = t.parent() != null ? t.parent().closest("a[href]") : null;
+                    if (anchor != null && !normalized(t.getWholeText()).isEmpty()) links.add(anchor.absUrl("href"));
+                } else text.append(' ');
+            }
+            String value = normalized(text.toString());
+            String path = selector(element) + (whole ? "" : "::sf-paragraph(" + index + ")");
+            index++;
+            // Standalone promotional actions inside an inserted block are not article prose.
+            // Citation lists remain eligible (including entirely linked citations).
+            boolean action = value.matches(".*(?:바로가기|더보기|구독하기|로그인)[ >›»→]*$") && !links.isEmpty();
+            if (!value.isEmpty() && !action) output.add(new Segment(path, value, List.copyOf(links)));
+        }
+    }
+    private void flatten(Element root, List<Node> nodes) {
+        for (Node node : root.childNodes()) {
+            if (node instanceof TextNode) nodes.add(node);
+            else if (node instanceof Element e) {
+                if (omit(e) || BLOCKS.contains(e.normalName()) || e.normalName().equals("br")) nodes.add(e);
+                else flatten(e, nodes);
+            }
+        }
     }
 
     // Scope extraction without cloning/removing nodes: source selectors must stay valid.
@@ -74,17 +129,13 @@ public class HtmlParser {
         }
         // Plain documents may have no semantic container. Preserve the existing limits
         // rather than silently taking the first 200 items or dropping long paragraphs.
-        return document.body();
+        return document.selectFirst("body") != null ? document.selectFirst("body") : document;
     }
 
     private int contentSize(Element root) {
-        int size = 0;
-        for (Element paragraph : root.select("p, li, blockquote")) {
-            if (excluded(paragraph) || paragraph.children().stream().anyMatch(e -> !e.select("p, li, blockquote").isEmpty())) continue;
-            int linked = paragraph.select("a").stream().mapToInt(a -> a.text().length()).sum();
-            size += Math.max(0, paragraph.text().length() - linked);
-        }
-        return size;
+        var segments = new ArrayList<Segment>();
+        collect(root, segments);
+        return segments.stream().mapToInt(s -> s.text().length()).sum();
     }
 
     // Repeated headline + publication-date rows describe a navigation feed, not

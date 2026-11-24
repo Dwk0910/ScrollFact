@@ -89,6 +89,34 @@ class ArticleScopeTest {
         assertThat(passages).extracting(p -> p.text()).containsExactly("짧은 본문", "신청은 help@example.org로 보내 달라고 말했다.");
     }
 
+    @Test void directTextArticleDoesNotFallBackToNavigationLinks() {
+        String links = java.util.stream.IntStream.range(0, 70).mapToObj(i ->
+            "<div><a href='https://example.org/menu/" + i + "'>탐색 메뉴</a></div>").collect(java.util.stream.Collectors.joining());
+        String html = "<body>" + links + "<article>첫 <strong>본문</strong><br><br>둘째 문단<br><br>셋째 문단</article></body>";
+        for (String host : new String[]{"https://one.example", "https://two.example"}) {
+            var page = parser.parse(html, host);
+            assertThat(page.passages()).extracting(p -> p.text()).containsExactly("첫 본문", "둘째 문단", "셋째 문단");
+            assertThat(page.sourceUrls()).isEmpty();
+        }
+    }
+
+    @Test void browserDomPreservesTextAfterScriptInsertedBlockInsideParagraph() {
+        String xml = "<!--scrollfact-dom-v1--><html xmlns='http://www.w3.org/1999/xhtml'><body><article><p>앞 문단<br/><br/>"
+            + "<span><div><p><a href='https://example.org/ad'>홍보 바로가기&gt;</a></p></div></span>"
+            + "마지막 이사장은 “끝까지 지원하겠다”고 말했다.<br/><br/>writer@example.org</p></article></body></html>";
+        var page = parser.parse(xml, "https://unrelated.example/story");
+        assertThat(page.passages()).extracting(p -> p.text()).containsExactly("앞 문단", "마지막 이사장은 “끝까지 지원하겠다”고 말했다.");
+        assertThat(page.sourceUrls()).isEmpty();
+        assertThat(page.passages().get(1).selector()).contains("article > p::sf-paragraph");
+    }
+
+    @Test void actualSourceBudgetStillRejectsInsteadOfSilentlyDroppingEvidence() {
+        String links = java.util.stream.IntStream.range(0, 41).mapToObj(i ->
+            "<a href='https://example.org/evidence/" + i + "'>근거 " + i + "</a>").collect(java.util.stream.Collectors.joining());
+        assertThatThrownBy(() -> parser.parse("<article><p>본문의 인용 자료 " + links + "</p></article>", url))
+            .isInstanceOf(ApiFailure.class).hasMessageContaining("본문에 연결된 출처");
+    }
+
     @Test void optionalEtnewsBlankLineRegression() throws Exception {
         String path = System.getenv("SCROLLFACT_ETNEWS_HTML");
         org.junit.jupiter.api.Assumptions.assumeTrue(path != null);

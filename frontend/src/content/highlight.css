@@ -11,7 +11,8 @@
   box-sizing: border-box !important;
   border-left: 3px solid #59759d !important;
   border-radius: 5px !important;
-  background: rgb(89 117 157 / 8%) !important;
+  background: rgb(95 145 205 / 10%) !important;
+  mix-blend-mode: multiply !important;
 }
 html.scrollfact-open body {
   box-sizing: border-box !important;
