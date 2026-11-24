@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ScrollFact · 테스트 준비</title>
+<style>body{font-family:system-ui,sans-serif;color:#253047;background:#f5f7fb;margin:0;padding:48px 24px;line-height:1.8}main{max-width:660px;margin:auto;background:white;padding:36px;border-radius:20px}h1{margin:0;font-size:30px}p{color:#657084}a{color:#2365d9}a.download{display:inline-block;background:#2365d9;color:white;border-radius:10px;padding:12px 24px;text-decoration:none}li{margin:14px 0}code{background:#eef2f8;padding:3px 6px;border-radius:4px}small{color:#7a8596}</style>
+<main><h1>ScrollFact</h1><p>서버 준비가 끝났어요. 브라우저에 확장을 설치하면 시작할 수 있어요.</p>
+<a class="download" href="extension.zip" download="ScrollFact-extension.zip">확장 프로그램 내려받기</a>
+<ol><li>ZIP을 고정된 폴더에 압축 해제하세요. 업데이트할 때도 같은 폴더를 사용하세요.</li><li>Chrome은 <code>chrome://extensions</code>, 웨일은 <code>whale://extensions</code>, Edge는 <code>edge://extensions</code>를 열어요.</li><li><strong>개발자 모드 → 압축 해제된 확장 프로그램을 로드</strong>에서 <code>manifest.json</code>이 있는 폴더를 선택하세요.</li><li>기사 페이지에서 ScrollFact를 열고 <strong>설정 → 계정</strong>에 사용할 ID를 입력하세요.</li><li><strong>AI 연결</strong>에서 API 키를 입력하고 모델을 선택해 저장하세요. 다른 컴퓨터의 키는 자동으로 옮겨지지 않아요.</li><li>기사에 댓글이 있다면 먼저 불러온 뒤 <strong>이 페이지 분석하기</strong>를 누르세요.</li></ol>
+<p>기본 서버 주소는 <code>http://127.0.0.1:8080</code>이에요. Docker 포트를 바꿨다면 확장 설정의 서버 주소도 바꿔 주세요.</p>
+<small>서버를 끄려면 저장소에서 <code>docker compose down</code>. 계정·키 설정은 Docker 볼륨에 남아요.</small></main></html>

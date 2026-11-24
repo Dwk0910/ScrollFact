@@ -4,9 +4,25 @@
 
 **새 컴퓨터에서 AI와 이어서 작업할 때는 [AGENTS.md](AGENTS.md)와 [AI 인수인계](docs/ai/HANDOFF.md)를 먼저 읽게 하세요.** 이 자료는 프로젝트 대화의 주요 결정과 현재 코드를 정리한 것이며 Codex 채팅 세션 전체를 복원하는 파일은 아닙니다.
 
+## 다른 컴퓨터에서 가장 간단하게 테스트
+
+Windows에는 Git과 Docker Desktop만 설치하고 Docker를 실행하세요. Node.js/Java 설치는 필요 없습니다.
+
+```powershell
+git clone https://github.com/Dwk0910/ScrollFact.git
+cd ScrollFact
+.\start-test.cmd
+```
+
+서버가 준비되면 설치 안내 페이지가 열립니다. **확장 ZIP 내려받기 → 압축 해제 → 브라우저 확장 관리에서 로드**한 뒤, 확장 설정에서 로컬 ID와 AI 키·모델을 한 번 저장하세요. 다음 실행부터는 저장된 설정을 사용합니다.
+
+macOS는 `./start-test.sh`. 두 OS 공통 명령은 `docker compose up --build -d --wait --wait-timeout 180`입니다. 종료는 `docker compose down`이며 데이터 볼륨을 유지합니다.
+
+[업데이트·포트 충돌·데이터 보관·줄바꿈 안내](docs/development/docker-testing.md)
+
 ## OpenAI / Gemini 분석 연결 (2026-11-24)
 
-기본 확장 화면에서 **이 페이지 분석하기**를 누르면 서버가 선택한 AI 제공자로 본문 구분·문단 해설·구절 판단·관점 묶음을 요청한다. 설정 → 계정에서 ID로 로그인한 뒤 AI 연결에서 키와 모델을 저장한다. API 키는 OS 보안 저장소로 보호하며 서버 재시작 후에도 복원한다. ID는 로컬 프로필 구분용이다. [AI 실행 안내](docs/development/openai-reader.md)를 먼저 확인한다. 실제 키가 없는 경우 설정에서 페이지 전송 점검 모드를 사용할 수 있다.
+기본 확장 화면에서 **이 페이지 분석하기**를 누르면 서버가 선택한 AI 제공자로 본문 구분·문단 해설·구절 판단·관점 묶음을 요청한다. 설정 → 계정에서 ID로 로그인한 뒤 AI 연결에서 키와 모델을 저장한다. API 키는 암호화하여 보관하며 서버 재시작 후에도 복원한다. 직접 실행은 OS 보안 저장소, Docker 실행은 별도 키 볼륨을 사용한다. ID는 로컬 프로필 구분용이다. [AI 실행 안내](docs/development/openai-reader.md)를 먼저 확인한다. 실제 키가 없는 경우 설정에서 페이지 전송 점검 모드를 사용할 수 있다.
 
 ## 실제 확장 개발: 페이지 전송 (2026-11-24)
 

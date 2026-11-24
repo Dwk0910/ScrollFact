@@ -1,6 +1,8 @@
 package org.onamhs.scrollfact.analysis;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -8,27 +10,34 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.*;
 import org.springframework.stereotype.Component;
 
-/** No plaintext fallback. Master key is held by the OS, never in the database. */
+/** No plaintext API-key fallback. Container master keys live in a separate private volume. */
 @Component
 public class SecretProtector {
     private final String service;
-    public SecretProtector() { this("org.scrollfact.local-profile-master.v1"); }
-    SecretProtector(String service) { this.service = service; }
+    private final Path keyFile;
+    public SecretProtector() { this("org.scrollfact.local-profile-master.v1", configuredKeyFile()); }
+    SecretProtector(String service) { this(service, null); }
+    SecretProtector(String service, Path keyFile) { this.service = service; this.keyFile = keyFile; }
+    private static Path configuredKeyFile() {
+        String path = System.getenv("SCROLLFACT_MASTER_KEY_FILE");
+        return path == null || path.isBlank() ? null : Path.of(path);
+    }
     public String protect(String context, String secret) { return transform(context, secret, true); }
     public String reveal(String context, String sealed) { return transform(context, sealed, false); }
     private String transform(String context, String value, boolean encrypt) {
         try {
             String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-            if (os.contains("win")) return windows(context, value, encrypt);
-            if (!os.contains("mac")) throw new IllegalStateException();
-            byte[] master = masterKey(encrypt);
+            if (keyFile == null && os.contains("win")) return windows(context, value, encrypt);
+            if (keyFile == null && !os.contains("mac")) throw new IllegalStateException();
+            String prefix = keyFile == null ? "mac1:" : "file1:";
+            byte[] master = keyFile == null ? masterKey(encrypt) : fileMasterKey(encrypt);
             try {
                 var cipher = Cipher.getInstance("AES/GCM/NoPadding");
                 byte[] nonce = new byte[12]; byte[] input;
                 if (encrypt) { new SecureRandom().nextBytes(nonce); input = value.getBytes(StandardCharsets.UTF_8); }
                 else {
-                    if (!value.startsWith("mac1:")) throw new IllegalStateException();
-                    byte[] packed = Base64.getDecoder().decode(value.substring(5));
+                    if (!value.startsWith(prefix)) throw new IllegalStateException();
+                    byte[] packed = Base64.getDecoder().decode(value.substring(prefix.length()));
                     if (packed.length < 29) throw new IllegalStateException();
                     System.arraycopy(packed, 0, nonce, 0, 12); input = Arrays.copyOfRange(packed, 12, packed.length);
                 }
@@ -37,12 +46,28 @@ public class SecretProtector {
                 byte[] output = cipher.doFinal(input);
                 if (!encrypt) return new String(output, StandardCharsets.UTF_8);
                 byte[] packed = new byte[12 + output.length]; System.arraycopy(nonce, 0, packed, 0, 12); System.arraycopy(output, 0, packed, 12, output.length);
-                return "mac1:" + Base64.getEncoder().encodeToString(packed);
+                return prefix + Base64.getEncoder().encodeToString(packed);
             } finally { Arrays.fill(master, (byte)0); }
         } catch (Exception e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            throw new ApiFailure(503, "secure_storage_unavailable", "운영체제 보안 저장소를 열지 못했습니다. 로그인 키체인/Windows 계정을 확인해 주세요. 키를 평문으로 저장하지 않았습니다.");
+            throw new ApiFailure(503, "secure_storage_unavailable", "키 보관소를 열지 못했습니다. 로그인 키체인/Windows 계정 또는 Docker 키 볼륨을 확인해 주세요. 키를 평문으로 저장하지 않았습니다.");
         }
+    }
+    private synchronized byte[] fileMasterKey(boolean create) throws Exception {
+        if (!keyFile.isAbsolute() || Files.isSymbolicLink(keyFile)) throw new IllegalStateException();
+        if (!Files.exists(keyFile, LinkOption.NOFOLLOW_LINKS)) {
+            if (!create) throw new IllegalStateException(); // Never replace a lost decryption key.
+            byte[] key = new byte[32]; new SecureRandom().nextBytes(key);
+            try {
+                Files.createFile(keyFile, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+                Files.write(keyFile, key, StandardOpenOption.WRITE);
+            } catch (FileAlreadyExistsException ignored) { // Another creator won; read its key.
+            } finally { Arrays.fill(key, (byte) 0); }
+        }
+        if (!Files.isRegularFile(keyFile, LinkOption.NOFOLLOW_LINKS)
+            || !Files.getPosixFilePermissions(keyFile).equals(PosixFilePermissions.fromString("rw-------"))
+            || Files.size(keyFile) != 32) throw new IllegalStateException();
+        return Files.readAllBytes(keyFile);
     }
     private synchronized byte[] masterKey(boolean create) throws Exception {
         var read = run(List.of("/usr/bin/security", "find-generic-password", "-s", service, "-a", "master", "-w"), "");
