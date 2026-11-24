@@ -28,3 +28,10 @@ out/
 /tmp/
 __pycache__/
 *.pyc
+
+# Local server diagnostics
+**/logs/
+
+# Poster rendering scratch dependencies and contact-bearing submission original
+/output/poster-2026-11-23/.build/
+/output/poster-2026-11-23/reference/user-edited-poster.hwpx

@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:1440px;height:1000px;overflow:hidden;background:#fff;font-family:"Apple SD Gothic Neo",sans-serif}.crop{position:absolute;overflow:hidden;border:1px solid #dce2eb}iframe{position:absolute;width:1440px;height:1400px;border:0;transform-origin:0 0}.note{position:absolute;color:#a83920;font-size:24px;font-weight:700}.note p{font-size:20px;line-height:1.55;font-weight:400;color:#526177;margin:10px 0}.num{display:inline-flex;background:#b44024;color:white;border-radius:50%;align-items:center;justify-content:center;width:32px;height:32px;margin-right:8px}svg{position:absolute;inset:0;pointer-events:none}.foot{position:absolute;left:30px;bottom:15px;color:#6e7a8d;font-size:16px}.view{position:absolute;font-size:16px;color:#718096}</style>
+<div class="note" style="left:30px;top:17px"><span class="num">1</span>문단 해설로 글의 주장과 흐름 읽기</div>
+<div class="crop" id="top" style="left:30px;top:70px"><iframe src="service.html" style="height:1000px"></iframe></div>
+<div class="view" style="left:30px;top:385px">같은 문단의 ‘이 문단을 살펴보면’과 ‘근거 출처’를 펼친 화면 ↓</div>
+<div class="crop" id="bottom" style="left:30px;top:420px"><iframe src="service.html"></iframe></div>
+<div class="note" id="n2" style="left:760px;top:450px"><span class="num">2</span>문장별 분석 표시<p>문장마다 자료와 어떤 관계인지 구분합니다.<br>아래 화면에는 ‘자료와 일치’와<br>‘확인 자료 부족’이 나타납니다.</p></div>
+<div class="note" id="n3" style="left:760px;top:630px"><span class="num">3</span>판단의 근거 확인<p>출처 이름과 인용한 내용을 펼쳐<br>해당 판단의 근거를 살펴봅니다.</p></div>
+<div class="note" id="n4" style="left:760px;top:800px"><span class="num">4</span>재차 확인할 부분 살펴보기<p>원문과 해설에는 노란 표시가 이어지고,<br>문장 분석에는 자료가 부족한 이유가 나옵니다.</p></div>
+<div class="foot">실제 화면의 두 부분 확대 · UI 배치 유지 · 붉은 번호와 화살표는 포스터 설명용</div><svg width="1440" height="1000"></svg>
+<script>
+const frames=[...document.querySelectorAll('iframe')];let stage=0;
+const tick=setInterval(()=>{let ds=frames.map(f=>f.contentDocument);if(ds.some(d=>!d?.querySelector('.panel-toggle')))return;
+if(stage===0){ds.forEach(d=>{if(d.querySelector('.opinion-panel').hidden)d.querySelector('.panel-toggle').click()});stage++;return}
+if(stage===1){ds.forEach(d=>d.querySelector('#clause-s2-0').click());stage++;return}
+if(stage===2){ds[1].querySelector('.article-evidence summary').click();stage++;return}
+if(stage===3){ds[1].querySelectorAll('.article-evidence .citations summary').forEach(e=>e.click());stage++;return}
+if(stage===4){const d0=ds[0],w0=frames[0].contentWindow;w0.scrollTo({top:w0.scrollY+d0.querySelector('#p3').getBoundingClientRect().top-310,behavior:'instant'});const panel=ds[1].querySelector('.panel-body'),detail=ds[1].querySelector('.article-evidence');panel.scrollTop+=detail.getBoundingClientRect().top-panel.getBoundingClientRect().top;stage++;return}
+if(stage===5){ds[0].querySelector('#p3').click();stage++;return}if(stage<8){stage++;return}
+ds.forEach(d=>d.activeElement?.blur());
+const d=ds[0],p=d.querySelector('#p3').getBoundingClientRect(),c=d.querySelector('.reading-context').getBoundingClientRect(),h=d.querySelector('.analysis-heading').getBoundingClientRect();
+const topX=45,topY=Math.min(p.top-12,h.top-8),topH=Math.max(p.bottom,c.bottom)+8-topY,topS=Math.min(1380/1380,300/topH);
+let box=document.querySelector('#top');box.style.width=1380*topS+'px';box.style.height=topH*topS+'px';frames[0].style.transform=`scale(${topS})`;frames[0].style.left=-topX*topS+'px';frames[0].style.top=-topY*topS+'px';
+const e=ds[1].querySelector('.article-evidence').getBoundingClientRect();let bs=Math.min(670/(e.width+20),520/(e.height+12));box=document.querySelector('#bottom');box.style.width=(e.width+20)*bs+'px';box.style.height=(e.height+12)*bs+'px';frames[1].style.transform=`scale(${bs})`;frames[1].style.left=-(e.left-10)*bs+'px';frames[1].style.top=-(e.top-6)*bs+'px';
+let paths=[],badges='';function target(sel){const r=ds[1].querySelector(sel).getBoundingClientRect();return [30+(r.right-e.left+10)*bs+5,420+(r.top+r.height/2-e.top+6)*bs]};
+for(const [sel,sy] of [['.paragraph-judgments .stance',466],['.citations',646],['.paragraph-judgments li:last-child',816]]){let [x,y]=target(sel);paths.push(`M 740 ${sy} H 714 V ${y} H ${x}`)}
+let a=d.querySelector('.reading-context h3').getBoundingClientRect();paths.push(`M 520 35 H ${30+(a.left+a.width/2-topX)*topS} V ${70+(a.top-topY)*topS-5}`);
+// Actual yellow underlines in the original paragraph and its linked explanation.
+for(const sel of ['#clause-s2-0','.reading-context p a']){const r=d.querySelector(sel).getBoundingClientRect();const x=30+(r.left+r.width/2-topX)*topS,y=70+(r.bottom-topY)*topS+4;paths.push(`M ${x} ${Math.min(370,y+12)} V ${y}`);badges+=`<circle cx="${x}" cy="${Math.min(378,y+26)}" r="10" fill="#b44024"/><text x="${x}" y="${Math.min(378,y+26)+5}" fill="white" font-size="13" text-anchor="middle">4</text>`}
+document.querySelector('svg').innerHTML='<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1 L8 5 L1 9" fill="none" stroke="#b44024" stroke-width="2"/></marker></defs>'+paths.map(x=>`<path d="${x}" fill="none" stroke="#b44024" stroke-width="3" marker-end="url(#arr)"/>`).join('')+badges;document.body.dataset.ready='true';clearInterval(tick);
+},200);
+</script>

@@ -27,6 +27,8 @@ for (const icon of Object.values(manifest.action?.default_icon ?? {})) asset(ico
 assert.ok(manifest.web_accessible_resources.some(({ resources }) =>
   resources.includes('src/sidepanel/index.html')), 'Embedded panel must be web accessible')
 asset('src/sidepanel/index.html')
+asset('reader.html')
+assert.ok(manifest.web_accessible_resources.some(({ resources }) => resources.includes('reader.html')), 'Current reader must be web accessible')
 
 let checked = 0
 for (const file of readdirSync(directory, { recursive: true })) {

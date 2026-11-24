@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ScrollFact Analysis API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     gzip HTML로 분석 리소스를 생성하고 상태와 완료 결과를 별도로 조회합니다.
     현재 단일 프로세스 + SQLite 구현이며 AI 제공자는 AnalysisEvaluator로 교체합니다.
@@ -10,6 +10,21 @@ info:
 servers:
   - url: http://127.0.0.1:8080
 paths:
+  /v1/reader/status:
+    get:
+      summary: 서버 OpenAI 설정 유무 (실제 키 인증 아님)
+      responses:
+        '200':
+          description: 비밀키를 제외한 설정 상태
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider: {type: string}
+                  configured: {type: boolean}
+                  model: {type: string}
+                  authentication: {type: string}
   /v1/analyses:
     post:
       operationId: createAnalysis
@@ -86,6 +101,7 @@ paths:
                 oneOf:
                   - {$ref: '#/components/schemas/AnalysisResult'}
                   - {$ref: '#/components/schemas/DiagnosticResult'}
+                  - {$ref: '#/components/schemas/ReaderResult'}
         '404': {$ref: '#/components/responses/Problem'}
         '409': {$ref: '#/components/responses/Problem'}
 components:
@@ -113,9 +129,9 @@ components:
         encoding: {type: string, const: gzip}
         mode:
           type: string
-          enum: [analysis, diagnostic]
+          enum: [analysis, diagnostic, reader]
           default: analysis
-          description: diagnostic은 AI 평가 없이 문단·출처 처리 보고서를 반환합니다. mode가 다른 동일 키 요청은 409입니다.
+          description: reader는 OpenAI 문단 해설·관점 분석을, diagnostic은 AI 평가 없이 문단·출처 처리 보고서를 반환합니다. mode가 다른 동일 키 요청은 409입니다.
     Analysis:
       type: object
       required: [analysisId, snapshotId, status]
@@ -226,6 +242,63 @@ components:
               title: {type: string}
               textCharacters: {type: integer, minimum: 0, description: 수집한 본문의 Java UTF-16 길이}
               failure: {type: string, description: 수집 실패 이유. 성공하면 생략됩니다.}
+    ReaderCheck:
+      type: object
+      required: [quote, status, reason, evidence]
+      properties:
+        quote: {type: string, description: 해당 원문에 존재하는 연속 구절}
+        status: {type: string, enum: [supported, contradicted, contested, needs_verification, opinion]}
+        reason: {type: string}
+        evidence:
+          type: array
+          items:
+            type: object
+            required: [url, quote]
+            properties:
+              url: {type: string, format: uri}
+              quote: {type: string}
+    ReaderResult:
+      type: object
+      required: [schemaVersion, kind, analysisId, snapshotId, document, htmlBytes, passages, blocks, perspectives, excludedBlocks, model, inputTokens, outputTokens]
+      properties:
+        schemaVersion: {type: string, const: '2.0'}
+        kind: {type: string, const: reader}
+        analysisId: {type: string, format: uuid}
+        snapshotId: {type: string, format: uuid}
+        document: {$ref: '#/components/schemas/DocumentInfo'}
+        htmlBytes: {type: integer}
+        passages: {$ref: '#/components/schemas/DiagnosticResult/properties/passages'}
+        excludedBlocks: {type: integer, minimum: 0}
+        model: {type: string}
+        inputTokens: {type: integer, minimum: 0}
+        outputTokens: {type: integer, minimum: 0}
+        blocks:
+          type: array
+          items:
+            type: object
+            required: [id, kind, title, summary, checks]
+            properties:
+              id: {type: string, description: passages의 원문 ID}
+              kind: {type: string, enum: [body, opinion]}
+              title: {type: string}
+              summary: {type: string}
+              checks: {type: array, items: {$ref: '#/components/schemas/ReaderCheck'}}
+        perspectives:
+          type: array
+          items:
+            type: object
+            required: [label, entries]
+            properties:
+              label: {type: string}
+              entries:
+                type: array
+                items:
+                  type: object
+                  required: [blockId, quote, reason]
+                  properties:
+                    blockId: {type: string}
+                    quote: {type: string}
+                    reason: {type: string}
     Problem:
       type: object
       required: [type, title, status, detail]

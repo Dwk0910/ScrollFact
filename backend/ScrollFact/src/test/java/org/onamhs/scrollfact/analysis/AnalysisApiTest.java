@@ -33,6 +33,7 @@ class AnalysisApiTest {
     @Autowired AnalysisRepository repository;
     @Autowired AnalysisService service;
     @MockitoBean AnalysisEvaluator evaluator;
+    @MockitoBean OpenAiReader reader;
     @MockitoBean PublicSourceFetcher fetcher;
     private static final String HTML = "<html><body><nav><p>메뉴</p></nav><article><p>검증할 주장 <a href='https://evidence.example/report'>출처</a></p><p>두 번째 문단 <a href='https://evidence.example/report#part'>같은 출처</a></p></article></body></html>";
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) throws Exception {
@@ -72,6 +73,26 @@ class AnalysisApiTest {
         }
         throw new AssertionError("Analysis never reached " + status);
     }
+    @Test void readerModePreservesEveryParagraphEvenIfAiCallsItAuxiliary() throws Exception {
+        when(reader.configured()).thenReturn(true);
+        when(reader.analyze(any())).thenAnswer(invocation -> {
+            EvaluationInput input = invocation.getArgument(0);
+            var blocks = List.of(new ReaderModels.Block(input.passages().get(0).id(), "auxiliary", "", "", List.of()),
+                new ReaderModels.Block(input.passages().get(1).id(), "body", "본문 제목", "문단 해설", List.of()));
+            return new ReaderModels.Completion(new ReaderModels.Output(blocks, List.of()), "test-model", 123, 45);
+        });
+        String id = create(UUID.randomUUID().toString(), HTML, "reader").path("analysisId").asText();
+        waitFor(id, "completed");
+        mvc.perform(get("/v1/analyses/" + id + "/result")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.kind").value("reader")).andExpect(jsonPath("$.schemaVersion").value("2.0"))
+            .andExpect(jsonPath("$.passages.length()").value(2)).andExpect(jsonPath("$.excludedBlocks").value(0))
+            .andExpect(jsonPath("$.passages[0].selector").value("html > body > article > p:nth-of-type(1)"))
+            .andExpect(jsonPath("$.blocks[0].title").value("원문 보존 · AI 해설 없음"))
+            .andExpect(jsonPath("$.blocks[1].summary").value("문단 해설"))
+            .andExpect(jsonPath("$.inputTokens").value(123)).andExpect(jsonPath("$.overview").doesNotExist());
+        verify(evaluator, never()).evaluate(any());
+    }
+
     @Test void createsPollsAndReadsResultWithDeduplicatedSources() throws Exception {
         String snapshot = UUID.randomUUID().toString();
         JsonNode created = create(snapshot, HTML);
@@ -108,6 +129,29 @@ class AnalysisApiTest {
             mvc.perform(delete("/v1/analyses/" + id)).andExpect(status().isNoContent());
             mvc.perform(get("/v1/analyses/" + id)).andExpect(status().isNotFound());
         } finally { release.countDown(); }
+    }
+    @Test void readerPublishesRealMaterialCountsAndRetryProgressWithSeparateCommentAnchors() throws Exception {
+        var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+        when(reader.configured()).thenReturn(true);
+        when(fetcher.fetchImage(any())).thenAnswer(invocation->new ImageInput(invocation.getArgument(0),"image/png","aW1hZ2U=",null));
+        when(reader.analyze(any())).thenAnswer(invocation->{
+            EvaluationInput in=invocation.getArgument(0);
+            in.progress().accept(new AiProgress("retry_wait",2,6,System.currentTimeMillis()+2000));entered.countDown();release.await();
+            var blocks=in.passages().stream().map(p->new ReaderModels.Block(p.id(),p.id().startsWith("comment-")?"opinion":"body","제목","해설",List.of())).toList();
+            return new ReaderModels.Completion(new ReaderModels.Output(blocks,List.of()),"test-model",10,20);
+        });
+        String html="<article><p>원문</p><img src='https://example.org/chart.png' alt='차트 설명'></article><div class='comments'><div data-comment-id='a'><div data-comment-body>실제 댓글</div></div></div>";
+        String id=create(UUID.randomUUID().toString(),html,"reader").path("analysisId").asText();
+        try {
+            assertThat(entered.await(3,TimeUnit.SECONDS)).isTrue();
+            mvc.perform(get("/v1/analyses/"+id)).andExpect(jsonPath("$.progress.stage").value("retry_wait"))
+                .andExpect(jsonPath("$.progress.attempt").value(2)).andExpect(jsonPath("$.progress.comments").value(1))
+                .andExpect(jsonPath("$.progress.imagesCompleted").value(1)).andExpect(jsonPath("$.sources.total").value(0));
+        } finally {release.countDown();}
+        waitFor(id,"completed");
+        mvc.perform(get("/v1/analyses/"+id+"/result")).andExpect(jsonPath("$.passages.length()").value(1))
+            .andExpect(jsonPath("$.comments.length()").value(1)).andExpect(jsonPath("$.comments[0].text").value("실제 댓글"))
+            .andExpect(jsonPath("$.images[0].included").value(true)).andExpect(jsonPath("$.blocks.length()").value(3));
     }
     @Test void unconfiguredEvaluatorReturns503WithoutFabricatingResults() throws Exception {
         when(evaluator.configured()).thenReturn(false);

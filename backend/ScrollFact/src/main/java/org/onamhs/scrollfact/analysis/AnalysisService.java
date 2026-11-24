@@ -15,16 +15,19 @@ import org.springframework.stereotype.Service;
 public class AnalysisService {
     private final AnalysisRepository repository;
     private final AnalysisEvaluator evaluator;
+    private final ActiveReader reader;
     private final HtmlParser parser;
     private final PublicSourceFetcher fetcher;
     private final ResultAssembler assembler;
     private final ObjectMapper mapper;
     private final ThreadPoolExecutor workers = new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(8));
     private final ExecutorService sources = Executors.newFixedThreadPool(4);
+    private final ConcurrentMap<String, WorkProgress> details = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Future<?>> running = new ConcurrentHashMap<>();
     public AnalysisService(AnalysisRepository repository, AnalysisEvaluator evaluator, HtmlParser parser,
-                           PublicSourceFetcher fetcher, ResultAssembler assembler, ObjectMapper mapper) {
+                           PublicSourceFetcher fetcher, ResultAssembler assembler, ObjectMapper mapper, ActiveReader reader) {
         this.repository = repository; this.evaluator = evaluator; this.parser = parser;
+        this.reader = reader;
         this.fetcher = fetcher; this.assembler = assembler; this.mapper = mapper;
     }
     public synchronized JobView create(UploadReader.Input input) {
@@ -34,14 +37,16 @@ public class AnalysisService {
             if (!existing.get().digest.equals(input.digest())) throw new ApiFailure(409, "idempotency_conflict", "같은 snapshotId에 다른 페이지 내용이 전달되었습니다.");
             return view(existing.get());
         }
-        if (!"diagnostic".equals(meta.mode()) && !evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
+        if ("reader".equals(meta.mode()) && !reader.configured()) throw new ApiFailure(503, "reader_unconfigured", "서버에 선택한 AI 제공자의 API 키와 모델을 설정해 주세요.");
+        if ("analysis".equals(meta.mode()) && !evaluator.configured()) throw new ApiFailure(503, "evaluator_unconfigured", "AI 분석기가 아직 연결되지 않았습니다. 서버의 분석 제공자를 설정해 주세요.");
         if (repository.count() >= 1000) throw new ApiFailure(429, "capacity_exceeded", "보관 중인 분석이 많습니다. 잠시 후 다시 시도해 주세요.");
         var entity = new AnalysisEntity();
         entity.id = UUID.randomUUID().toString(); entity.snapshotId = meta.snapshotId(); entity.digest = input.digest();
         entity.status = "queued"; entity.phase = "queued"; entity.createdAt = System.currentTimeMillis();
         repository.saveAndFlush(entity);
         // Register before execution so a very fast worker cannot leave a completed Future in the map.
-        var task = new FutureTask<Void>(() -> { process(entity.id, input); return null; });
+        var selectedReader = reader.snapshot();
+        var task = new FutureTask<Void>(() -> { process(entity.id, input, selectedReader); return null; });
         running.put(entity.id, task);
         try { workers.execute(task); }
         catch (RejectedExecutionException e) {
@@ -58,6 +63,7 @@ public class AnalysisService {
         catch (Exception e) { throw new ApiFailure(500, "invalid_stored_result", "저장된 결과를 읽지 못했습니다."); }
     }
     public synchronized void delete(String id) {
+        details.remove(id);
         Future<?> task = running.remove(id);
         if (task != null) task.cancel(true);
         workers.purge();
@@ -66,7 +72,7 @@ public class AnalysisService {
     private AnalysisEntity find(String id) { return repository.findById(id).orElseThrow(() -> new ApiFailure(404, "analysis_not_found", "분석이 없거나 만료되었습니다.")); }
     private JobView view(AnalysisEntity entity) {
         SourceProgress progress = entity.totalSources == null ? null : new SourceProgress(entity.completedSources, entity.totalSources, entity.failedSources);
-        return new JobView(entity.id, entity.snapshotId, entity.status, entity.phase, progress, entity.error);
+        return new JobView(entity.id, entity.snapshotId, entity.status, entity.phase, progress, entity.error, details.get(entity.id));
     }
     private synchronized void progress(String id, String phase, Integer total, int completed, int failed) {
         var entity = find(id);
@@ -89,11 +95,12 @@ public class AnalysisService {
         });
     }
     private static boolean terminal(AnalysisEntity e) { return "completed".equals(e.status) || "failed".equals(e.status); }
-    private void process(String id, UploadReader.Input input) {
+    private void process(String id, UploadReader.Input input, ActiveReader.RequestReader selectedReader) {
         var pending = new ArrayList<Future<SourceDocument>>();
         try {
             progress(id, "extracting", null, 0, 0);
             ParsedPage page = parser.parse(input.html(), input.metadata().url());
+            details.put(id, new WorkProgress("sources", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), 0, 0, 0, 0, 0));
             progress(id, "checking_sources", page.sourceUrls().size(), 0, 0);
             var completion = new ExecutorCompletionService<SourceDocument>(sources);
             for (String url : page.sourceUrls()) pending.add(completion.submit(() -> fetcher.fetch(url)));
@@ -114,6 +121,32 @@ public class AnalysisService {
                 return;
             }
             progress(id, "summarizing", pending.size(), pending.size(), failed);
+            if ("reader".equals(meta.mode())) {
+                var imageInputs = new ArrayList<ImageInput>();
+                int imageBytes = 0, imageFailures = 0;
+                for (var image : page.images()) {
+                    if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+                    details.put(id, new WorkProgress("images", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), imageInputs.size(), imageFailures, 0, 0, 0));
+                    var data = fetcher.fetchImage(image);
+                    if (data.available() && imageBytes + data.base64().length() > 12_000_000) data = new ImageInput(image, "", "", "이번 요청의 전체 이미지 용량을 초과했어요");
+                    if (data.available()) imageBytes += data.base64().length(); else imageFailures++;
+                    imageInputs.add(data);
+                }
+                var allPassages = new ArrayList<>(page.passages()); allPassages.addAll(page.comments());
+                for (var image : page.images()) allPassages.add(new Passage(image.id(), image.selector(), image.caption().isBlank() ? "본문 이미지" : image.caption()));
+                details.put(id, new WorkProgress("requesting", page.passages().size(), page.comments().size(), page.commentAreaDetected(), page.images().size(), imageInputs.size(), imageFailures, 1, 1, 0));
+                var evaluationInput = new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), List.copyOf(allPassages), List.copyOf(documents), List.copyOf(imageInputs), event -> {
+                    if (Thread.currentThread().isInterrupted()) throw new CancellationException();
+                    details.computeIfPresent(id, (key, value) -> value.ai(event));
+                });
+                var completionResult = selectedReader.analyze(evaluationInput);
+                var output = ReaderContract.preserveParagraphs(completionResult.output(), evaluationInput);
+                complete(id, new ReaderModels.Result("2.0", "reader", id, meta.snapshotId(), new DocumentInfo(meta.url(), meta.title()),
+                    meta.htmlBytes(), page.passages(), output.blocks(), output.perspectives(), 0,
+                    completionResult.model(), completionResult.inputTokens(), completionResult.outputTokens(), page.comments(), page.commentAreaDetected(),
+                    imageInputs.stream().map(image -> new ImageResult(image.material().id(), image.material().selector(), image.material().url(), image.material().caption().isBlank() ? "본문 이미지" : image.material().caption(), image.available(), image.failure())).toList()));
+                return;
+            }
             Evaluation evaluation = evaluator.evaluate(new EvaluationInput(new DocumentInfo(meta.url(), meta.title()), page.passages(), List.copyOf(documents)));
             complete(id, assembler.assemble(id, meta, page, documents, evaluation));
         } catch (InterruptedException | CancellationException e) { Thread.currentThread().interrupt(); }

@@ -89,6 +89,27 @@ public class PublicSourceFetcher implements AutoCloseable {
             } finally { deadline.cancel(false); }
         } catch (Exception e) { return failed(url, "출처 연결 실패 또는 시간 초과"); }
     }
+    public ImageInput fetchImage(ImageMaterial image) {
+        try {
+            URI uri = URI.create(image.url());
+            if (!Set.of("https", "http").contains(uri.getScheme()) || uri.getHost() == null || uri.getUserInfo() != null
+                || (uri.getPort() != -1 && uri.getPort() != 80 && uri.getPort() != 443)) throw new IllegalArgumentException();
+            for (InetAddress address : InetAddress.getAllByName(uri.getHost())) if (!publicAddress(address)) throw new IllegalArgumentException();
+            var request = new HttpGet(uri);
+            request.setHeader("User-Agent", "ScrollFact/0.3 (article image analysis)");
+            var deadline = deadlines.schedule(request::cancel, 15, TimeUnit.SECONDS);
+            try {
+                return client.execute(request, response -> {
+                    if (response.getCode() != 200 || response.getEntity() == null) return new ImageInput(image, "", "", "이미지에 접근하지 못했어요");
+                    String mime = Optional.ofNullable(response.getEntity().getContentType()).orElse("").split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+                    if (!Set.of("image/jpeg", "image/png", "image/webp").contains(mime)) return new ImageInput(image, "", "", "JPEG·PNG·WebP 이외의 이미지 형식이에요");
+                    byte[] bytes = response.getEntity().getContent().readNBytes(2 * 1024 * 1024 + 1);
+                    if (bytes.length == 0 || bytes.length > 2 * 1024 * 1024) return new ImageInput(image, "", "", "이미지가 비어 있거나 2 MiB를 초과했어요");
+                    return new ImageInput(image, mime, Base64.getEncoder().encodeToString(bytes), null);
+                });
+            } finally { deadline.cancel(false); }
+        } catch (Exception e) { return new ImageInput(image, "", "", "공개 이미지에 접근하지 못했거나 시간이 초과됐어요"); }
+    }
     private SourceDocument failed(String url, String reason) { return new SourceDocument(url, "", "", "", reason); }
     @PreDestroy public void close() throws Exception { deadlines.shutdownNow(); client.close(); }
 }

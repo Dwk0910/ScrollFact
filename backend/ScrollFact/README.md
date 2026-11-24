@@ -1,5 +1,7 @@
 # ScrollFact backend
 
+> 최신 확장은 `mode: reader`로 OpenAI 분석을 요청합니다. 서버의 `OPENAI_API_KEY`·`SCROLLFACT_OPENAI_MODEL` 설정이 필요합니다. 아래 diagnostic 설명은 전송 점검 모드에 해당합니다. 실행 및 schemaVersion 2.0 계약은 [OpenAI 안내](../../docs/development/openai-reader.md)를 참고하세요.
+
 Spring Boot 3.5 + SQLite 기반 비동기 분석 REST API. 원문 처리/출처 수집/작업 수명주기는 구현되어 있고, 실제 AI 요약·신뢰도 점수 산출기는 교체 가능한 인터페이스로 분리되어 있습니다. **현재 특정 AI 제공자는 연결하지 않았습니다.**
 
 ## 실행과 검증

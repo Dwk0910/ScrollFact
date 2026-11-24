@@ -1,3 +1,6 @@
+import { normalizeSource, sourceSegments, sourceText } from './sourceSegments'
+import { ParagraphTarget } from './paragraphTarget'
+import { serializeUpload } from './snapshot'
 import {
   isRecord,
   MAX_HTML_BYTES,
@@ -26,7 +29,8 @@ export function mountContentController(host: ContentHost) {
   let panelOffset = 0
   let detachPanel: (() => void) | null = null
   let activeId: string | null = null
-  let targets = new Map<string, HTMLElement>()
+  let selectedId: string | null = null
+  let targets = new Map<string, HTMLElement | ParagraphTarget>()
 
   const emit = host.emit
 
@@ -37,6 +41,18 @@ export function mountContentController(host: ContentHost) {
       element.classList.remove('scrollfact-active')
     targets = new Map()
     activeId = null
+    selectedId = null
+  }
+
+  function activate(id: string | null) {
+    activeId = id
+    for (const element of targets.values()) element.classList.remove('scrollfact-active')
+    if (id) targets.get(id)?.classList.toggle('scrollfact-active', true)
+    if (id && snapshot) emit({
+      type: MessageType.activeSectionChanged,
+      snapshotId: snapshot.snapshotId,
+      sectionId: id,
+    })
   }
 
   function resetSnapshot() {
@@ -54,7 +70,7 @@ export function mountContentController(host: ContentHost) {
 
   function captureDocument(): DocumentSnapshot {
     resetSnapshot()
-    const html = document.documentElement.outerHTML
+    const html = serializeUpload(document)
     if (new Blob([html]).size > MAX_HTML_BYTES)
       throw new Error('페이지 HTML이 20 MiB를 초과해 분석할 수 없습니다.')
     snapshot = { snapshotId: crypto.randomUUID(), url: location.href }
@@ -69,7 +85,7 @@ export function mountContentController(host: ContentHost) {
   // Local export is independent of analysis: saving must not reset the active watch.
   function serializePageHtml(): string {
     const clone = document.documentElement.cloneNode(true) as HTMLElement
-    clone.querySelector('#scrollfact-root')?.remove()
+    clone.querySelectorAll('#scrollfact-root, [data-scrollfact-root]').forEach(node => node.remove())
     clone.classList.remove('scrollfact-open')
     clone.style.removeProperty('--scrollfact-offset')
     clone.querySelectorAll('.scrollfact-active').forEach((node) => {
@@ -78,9 +94,12 @@ export function mountContentController(host: ContentHost) {
     return `<!DOCTYPE html>\n${clone.outerHTML}`
   }
 
-  function matchElement(selector: string): HTMLElement | null {
+  const textOf = (element: HTMLElement | ParagraphTarget) => element instanceof ParagraphTarget ? normalizeSource(element.textContent) : sourceText(element)
+
+  function matchElement(selector: string, expected?: string): HTMLElement | ParagraphTarget | null {
     try {
-      const matches = document.querySelectorAll(selector)
+      const part = selector.match(/::sf-paragraph\((\d+)\)$/)
+      const matches = document.querySelectorAll(part ? selector.slice(0, part.index) : selector)
       if (matches.length !== 1) return null
       const element = matches[0]
       if (
@@ -91,6 +110,16 @@ export function mountContentController(host: ContentHost) {
         )
       )
         return null
+      if (part) {
+        const segments = sourceSegments(element)
+        let segment = segments[Number(part[1])]
+        if (expected !== undefined && segment?.text !== normalizeSource(expected)) {
+          const matches = segments.filter(s => s.text === normalizeSource(expected))
+          if (matches.length !== 1) return null
+          segment = matches[0]
+        }
+        return segment ? new ParagraphTarget(element, segment.range, segment.text) : null
+      }
       return element
     } catch {
       return null
@@ -101,7 +130,7 @@ export function mountContentController(host: ContentHost) {
     checkLocation()
     if (!snapshot || snapshot.snapshotId !== snapshotId || !Array.isArray(value))
       return { ok: false }
-    const specs: { id: string; selector: string }[] = []
+    const specs: { id: string; selector: string; text?: string }[] = []
     const ids = new Set<string>()
     for (const item of value) {
       if (
@@ -114,21 +143,21 @@ export function mountContentController(host: ContentHost) {
       )
         return { ok: false }
       ids.add(item.id)
-      specs.push({ id: item.id, selector: item.selector })
+      specs.push({ id: item.id, selector: item.selector, text: typeof item.text === 'string' ? item.text : undefined })
     }
     clearWatch()
     const unmatchedIds: string[] = []
     const originalText = new Map<string, string>()
-    const matchedElements = new Set<HTMLElement>()
+    const matchedElements = new Set<HTMLElement | ParagraphTarget>()
     for (const spec of specs) {
-      const element = matchElement(spec.selector)
-      if (!element || matchedElements.has(element)) {
+      const element = matchElement(spec.selector, spec.text)
+      if (!element || matchedElements.has(element) || (spec.text !== undefined && textOf(element) !== normalizeSource(spec.text))) {
         unmatchedIds.push(spec.id)
         continue
       }
       matchedElements.add(element)
       targets.set(spec.id, element)
-      originalText.set(spec.id, element.textContent ?? '')
+      originalText.set(spec.id, textOf(element))
     }
 
     let frame = 0
@@ -137,6 +166,15 @@ export function mountContentController(host: ContentHost) {
       frame = 0
       checkLocation()
       if (!snapshot) return
+      if (selectedId) {
+        const selected = targets.get(selectedId)
+        if (selected?.isConnected) {
+          // A site can replace the DOM node without changing its text. Restore
+          // the explicit selection on the new node instead of returning early.
+          if (activeId !== selectedId || !selected.classList.contains('scrollfact-active')) activate(selectedId)
+          return
+        }
+      }
       const middle = window.innerHeight * 0.45
       let bestId: string | null = null
       let bestDistance = Infinity
@@ -144,7 +182,7 @@ export function mountContentController(host: ContentHost) {
         if (
           !element.isConnected ||
           !element.getClientRects().length ||
-          getComputedStyle(element).visibility === 'hidden'
+          getComputedStyle(element instanceof ParagraphTarget ? element.element : element).visibility === 'hidden'
         )
           continue
         const rect = element.getBoundingClientRect()
@@ -165,19 +203,22 @@ export function mountContentController(host: ContentHost) {
         }
       }
       if (bestId === activeId) return
-      activeId = bestId
-      for (const [id, element] of targets)
-        element.classList.toggle('scrollfact-active', id === bestId)
-      if (bestId)
-        emit({
-          type: MessageType.activeSectionChanged,
-          snapshotId: snapshot.snapshotId,
-          sectionId: bestId,
-        })
+      activate(bestId)
     }
     const schedule = () => {
       if (!frame) frame = window.requestAnimationFrame(updateActive)
     }
+    const resumeFollowing = (event: Event) => {
+      if (event.composedPath().some(node => node instanceof HTMLElement && node.id === 'scrollfact-root')) return
+      if (event instanceof KeyboardEvent) {
+        if (!['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return
+        if (event.target instanceof HTMLElement && event.target.closest('input, textarea, select, [contenteditable]')) return
+      }
+      selectedId = null
+      schedule()
+    }
+    for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
+      window.addEventListener(type, resumeFollowing, { capture: true, passive: true })
     const observer = new MutationObserver(() => {
       window.clearTimeout(mutationTimer)
       mutationTimer = window.setTimeout(() => {
@@ -185,9 +226,9 @@ export function mountContentController(host: ContentHost) {
         if (!snapshot) return
         for (const spec of specs) {
           if (!originalText.has(spec.id)) continue
-          const element = matchElement(spec.selector)
+          const element = matchElement(spec.selector, spec.text)
           const previous = targets.get(spec.id)
-          if (element && element.textContent !== originalText.get(spec.id)) {
+          if (element && textOf(element) !== originalText.get(spec.id)) {
             resetSnapshot()
             emit({ type: MessageType.documentChanged })
             return
@@ -212,6 +253,8 @@ export function mountContentController(host: ContentHost) {
     window.addEventListener('popstate', checkLocation)
     window.addEventListener('hashchange', checkLocation)
     stopWatch = () => {
+      for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
+        window.removeEventListener(type, resumeFollowing, true)
       observer.disconnect()
       window.clearTimeout(mutationTimer)
       window.cancelAnimationFrame(frame)
@@ -270,14 +313,14 @@ export function mountContentController(host: ContentHost) {
     root.dataset.scrollfactRoot = 'true'
     const shadow = root.attachShadow({ mode: host.shadowMode ?? 'closed' })
     shadow.innerHTML = `<style>
-      :host { all: initial; position: fixed !important; inset: 0 0 0 auto !important; height: 100dvh !important; z-index: 2147483646 !important; background: #f8faf8 !important; box-shadow: -8px 0 30px #2034280c !important; }
+      :host { all: initial; position: fixed !important; inset: 0 0 0 auto !important; height: 100dvh !important; z-index: 2147483646 !important; background: #ffffff !important; box-shadow: -8px 0 30px #2034280c !important; }
       .shell { display: flex; height: 100%; width: 100%; font-family: sans-serif; }
       .handle { width: 7px; flex-shrink: 0; border: 0; border-left: 1px solid #dfe7db; background: #edf2e9; cursor: ew-resize; touch-action: none; padding: 0; }
       .body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-      .tools { height: 25px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-bottom: 1px solid #e2e9df; background: #f2f6ef; padding: 0 8px; }
-      .tools button { border: 0; background: transparent; color: #6f846e; padding: 2px 6px; font: 11px sans-serif; cursor: pointer; }
+      .tools { height: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-bottom: 1px solid #edf0f4; background: #ffffff; padding: 0 8px; }
+      .tools button { border: 0; background: transparent; color: #929bab; padding: 2px 6px; font: 11px sans-serif; cursor: pointer; }
       iframe { flex: 1; min-height: 0; width: 100%; border: 0; }
-      .expand { display: none; width: 44px; height: 100%; border: 0; background: #285f4d; color: #fff; writing-mode: vertical-rl; font: 600 12px sans-serif; letter-spacing: 2px; cursor: pointer; }
+      .expand { display: none; width: 44px; height: 100%; border: 0; background: #375fa8; color: #fff; writing-mode: vertical-rl; font: 600 12px sans-serif; letter-spacing: 2px; cursor: pointer; }
       :host(.collapsed) .body, :host(.collapsed) .handle { display: none; }
       :host(.collapsed) .expand { display: block; }
       button:focus-visible { outline: 2px solid #288563; outline-offset: -2px; }
@@ -394,6 +437,8 @@ export function mountContentController(host: ContentHost) {
           sendResponse({ ok: false })
           return
         }
+        selectedId = String(message.sectionId)
+        activate(selectedId)
         element.scrollIntoView({
           block: 'center',
           behavior: matchMedia('(prefers-reduced-motion: reduce)').matches

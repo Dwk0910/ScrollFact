@@ -40,7 +40,7 @@ function setup(fetch) {
     CompressionStream,
     AbortSignal,
     DOMException,
-    setTimeout: (fn, ms) => setTimeout(fn, ms === 2000 ? 1 : ms),
+    setTimeout: (fn, ms) => setTimeout(fn, [750, 2000].includes(ms) ? 1 : ms),
     clearTimeout,
     fetch,
   })
@@ -243,3 +243,47 @@ test('diagnostic mode uses the same upload and polling flow without accepting AI
   returned = fixture
   await assert.rejects(run(snapshot, new AbortController().signal), /형식/)
 })
+
+test('reader mode validates source-bound blocks and perspective quotes', async () => {
+  const result = {
+    schemaVersion: '2.0', kind: 'reader', analysisId: queued.analysisId, snapshotId: snapshot.snapshotId,
+    document: { url: snapshot.url, title: '제목' }, htmlBytes: 100, excludedBlocks: 1,
+    model: 'test-model', inputTokens: 100, outputTokens: 20,
+    passages: [{ id: 'p1', selector: 'article > p', text: '발표 기회가 필요합니다.' }],
+    blocks: [{ id: 'p1', kind: 'body', title: '제목', summary: '해설', checks: [{ quote: '발표 기회', status: 'opinion', reason: '이유', evidence: [] }] }],
+    perspectives: [{ label: '기회 요청', entries: [{ blockId: 'p1', quote: '발표 기회', reason: '명시된 이유 없음' }] }],
+  }
+  const api = setup(async (_url, init) => {
+    if (init.method === 'POST') {
+      assert.equal(JSON.parse(await init.body.get('metadata').text()).mode, 'reader')
+      return response(completed, 202)
+    }
+    return response(result)
+  })
+  assert.equal((await api.createReaderAnalyzer('https://api.example.com')(snapshot, new AbortController().signal)).kind, 'reader')
+  assert.equal(api.isReaderResult({ ...result, blocks: [] }), false)
+  const wrong = structuredClone(result); wrong.perspectives[0].entries[0].quote = '만든 발언'
+  assert.equal(api.isReaderResult(wrong), false)
+})
+
+test('reader accepts separate comments and images but rejects invented material quotes', async()=>{
+ const data={schemaVersion:'2.0',kind:'reader',analysisId:queued.analysisId,snapshotId:snapshot.snapshotId,document:{url:snapshot.url,title:'기사'},htmlBytes:100,excludedBlocks:0,model:'test',inputTokens:1,outputTokens:1,
+ passages:[{id:'p1',selector:'p',text:'기사 원문'}],comments:[{id:'comment-1',selector:'.comment-body',text:'실제 댓글'}],commentAreaDetected:true,
+ images:[{id:'image-1',selector:'img',url:'https://example.org/image.png',caption:'그림 설명',included:true}],
+ blocks:[{id:'p1',kind:'body',title:'기사',summary:'해설',checks:[]},{id:'comment-1',kind:'opinion',title:'댓글',summary:'의견 해설',checks:[]},{id:'image-1',kind:'body',title:'그림',summary:'이미지 설명',checks:[]}],
+ perspectives:[{label:'입장',entries:[{blockId:'comment-1',quote:'실제 댓글',reason:'명시된 이유 없음'}]}]};
+ const api=setup(async(url,init)=>url.endsWith('/result')?response(data):response(completed,init.method==='POST'?202:200));
+ assert.equal((await api.createReaderAnalyzer('https://api.example.com')(snapshot,new AbortController().signal)).comments.length,1);
+ data.perspectives[0].entries[0].quote='없는 댓글';
+ await assert.rejects(api.createReaderAnalyzer('https://api.example.com')(snapshot,new AbortController().signal),/형식/);
+});
+
+test('propagates retry details and rejects impossible progress counters',async()=>{
+ const detail={stage:'retry_wait',paragraphs:17,comments:5,commentAreaDetected:true,images:2,imagesCompleted:2,imagesFailed:0,attempt:2,maxAttempts:6,retryAt:Date.now()+2000};
+ const seen=[];let count=0;
+ const api=setup(async(url,init)=>url.endsWith('/result')?response(fixture):response(++count===1?{...queued,status:'running',phase:'summarizing',progress:detail}:completed,init.method==='POST'?202:200));
+ await api.createApiAnalyzer('https://api.example.com')(snapshot,new AbortController().signal,p=>seen.push(p));
+ assert.equal(seen.find(p=>p.detail)?.detail.attempt,2);
+ const bad=setup(async()=>response({...queued,progress:{...detail,imagesCompleted:3}},202));
+ await assert.rejects(bad.createApiAnalyzer('https://api.example.com')(snapshot,new AbortController().signal),/형식/);
+});

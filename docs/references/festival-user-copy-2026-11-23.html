@@ -1,0 +1,765 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>ScrollFact 축제 부스 시연 (Copy)</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;800&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* layout: news page fills the left; ScrollFact is a Chrome-style side panel fixed to the right edge. Page HTML is only underlined; details open in popups and the side panel. Phones: panel becomes a bottom drawer */
+/* single light theme. Page = white newspaper in serif; ScrollFact = everything in its own blue world (blue header, blue-tinted surfaces, sans) */
+:root{
+  color-scheme:light;
+  --paper:#FFFFFF; --ink:#15171B; --ink-2:#3B4048; --ink-3:#5C626B; --rule:#DADBD7;
+  --chrome:#E9EBEE; --card:#FFFFFF;
+  --sf:#2347A6; --sf-deep:#183584; --sf-bg:#EAF0FC; --sf-line:#C3D1F0; --sf-soft:#D9E4FA;
+  --panel:var(--sf-bg); --brand:var(--sf); --brand-ink:#FFFFFF; --brand-soft:var(--sf-soft);
+  --u-claim:#5F646C; --u-intent:#5640D8; --u-opinion:#0B7A5C;
+  --claim-soft:#E9EAEC; --intent-soft:#E9E4FE; --opinion-soft:#D8F1E7;
+  --ok:#17693C; --ok-soft:#DDF1E3; --warn:#7A4E00; --warn-soft:#FCEBC6; --like:#C2410C;
+  --hl:rgba(35,71,166,.10); --shadow:0 14px 36px rgba(24,53,132,.20),0 2px 8px rgba(20,24,32,.10);
+  --f-news:"Noto Serif KR","Nanum Myeongjo",Georgia,serif;
+  --f-ui:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --sp:400px;
+}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
+button:focus-visible,textarea:focus-visible,summary:focus-visible,.m:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+:root{--tb:52px; --dim:rgba(234,240,252,.72)}
+.page{padding-top:var(--tb);transition:margin-right .4s cubic-bezier(.2,.8,.2,1)}
+body.sf-open .page{margin-right:var(--sp)}
+
+/* mock browser toolbar */
+.tb{position:fixed;top:0;left:0;right:0;z-index:50;background:var(--chrome);border-bottom:1px solid var(--rule);
+  padding-top:env(safe-area-inset-top,0px);padding-left:max(10px,env(safe-area-inset-left,0px));padding-right:max(10px,env(safe-area-inset-right,0px))}
+.tb-in{height:var(--tb);display:flex;align-items:center;gap:8px}
+.tb .nav{display:flex;gap:2px;color:var(--ink-3)}
+.tb .nav span,.tb .ext,.tb .puz{width:32px;height:32px;border-radius:50%;display:grid;place-items:center}
+.tb svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.url{flex:1;min-width:0;height:34px;border-radius:17px;background:var(--panel);display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.url b{font-weight:500;color:var(--ink)}
+.tb .puz{color:var(--ink-3)}
+.ext{border:0;background:transparent;position:relative}
+.ext:hover{background:var(--panel)}
+.ext i{width:22px;height:22px;border-radius:6px;background:var(--ink-3);display:grid;place-items:center;transition:background .3s}
+.ext i::before{content:"";width:10px;height:2px;background:var(--paper);box-shadow:0 -4px 0 var(--paper),0 4px 0 var(--paper)}
+.ext[aria-pressed="true"] i{background:var(--brand)}
+.ext[aria-pressed="true"] i::before{background:var(--brand-ink);box-shadow:0 -4px 0 var(--brand-ink),0 4px 0 var(--brand-ink)}
+.hint{position:absolute;top:calc(100% + 10px);right:-4px;background:var(--ink);color:var(--paper);font-size:12.5px;padding:7px 11px;border-radius:8px;white-space:nowrap;pointer-events:none;animation:bob 1.8s ease-in-out infinite}
+.hint::before{content:"";position:absolute;top:-5px;right:16px;width:10px;height:10px;background:var(--ink);transform:rotate(45deg)}
+@keyframes bob{50%{transform:translateY(3px)}}
+
+/* loading veil over the rest of the screen */
+.veil{position:fixed;left:0;right:0;bottom:0;top:calc(var(--tb) + env(safe-area-inset-top,0px));z-index:25;background:var(--dim);
+  backdrop-filter:blur(1.5px);-webkit-backdrop-filter:blur(1.5px);opacity:0;pointer-events:none;transition:opacity .35s;overflow:hidden}
+body.sf-loading .veil{opacity:1;pointer-events:auto}
+body.sf-open .veil{right:var(--sp)}
+.veil .sweep{position:absolute;left:0;right:0;height:120px;top:-120px;
+  background:linear-gradient(to bottom,transparent,var(--brand-soft) 85%,var(--brand) 100%);opacity:.55;animation:sweep 1.4s cubic-bezier(.5,0,.5,1) infinite}
+@keyframes sweep{to{top:100%}}
+.veil .status{position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);
+  padding:16px 18px;width:min(300px,calc(100% - 32px));display:grid;gap:10px;font-size:13.5px}
+.status .st{display:flex;align-items:center;gap:10px;color:var(--ink-3)}
+.status .st.now{color:var(--ink)}
+.status .st.done{color:var(--ink-2)}
+.status .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--rule);flex:none}
+.status .st.now .dot{border-color:var(--brand);border-top-color:transparent;animation:spin .7s linear infinite}
+.status .st.done .dot{border-color:var(--ok);background:var(--ok)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.skel{display:grid;gap:10px}
+.skel div{height:14px;border-radius:6px;background:linear-gradient(90deg,var(--claim-soft) 25%,var(--card) 50%,var(--claim-soft) 75%);background-size:200% 100%;animation:shim 1.1s linear infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.inner{max-width:760px;margin:0 auto;padding-inline:24px}
+
+.demo-note{padding-block:8px;font-size:12px;color:var(--ink-3);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.demo-note b{font-weight:600;color:var(--warn);background:var(--warn-soft);padding:1px 8px;border-radius:4px}
+.mast{border-top:3px solid var(--ink);border-bottom:1px solid var(--rule);padding-block:14px 10px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.mast .name{font-family:var(--f-news);font-weight:800;font-size:28px;letter-spacing:-.02em}
+.mast nav{display:flex;gap:16px;font-size:13px;color:var(--ink-2);flex-wrap:wrap}
+.mast nav span:first-child{color:var(--ink);font-weight:600}
+
+article{padding-block:28px 10px}
+.kicker{font-size:13px;font-weight:600;color:var(--brand);letter-spacing:.04em}
+h1{font-family:var(--f-news);font-weight:800;font-size:clamp(26px,4.2vw,36px);line-height:1.3;letter-spacing:-.02em;margin:8px 0 10px;text-wrap:balance}
+.sub{font-family:var(--f-news);font-size:18px;line-height:1.6;color:var(--ink-2);margin:0 0 18px;text-wrap:balance}
+.byline{font-size:13px;color:var(--ink-3);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding-block:10px;margin-bottom:22px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.photo{aspect-ratio:16/8;max-width:100%;border-radius:4px;overflow:hidden;margin-bottom:6px}
+.photo svg{width:100%;height:100%;display:block}
+.cap{font-size:12px;color:var(--ink-3);margin-bottom:26px}
+article p{font-family:var(--f-news);font-size:18px;line-height:2.05;margin:0 0 1.4em;word-break:keep-all}
+.end{font-size:13px;color:var(--ink-3);padding-top:4px}
+
+.acts{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding-block:12px;margin-top:20px}
+.act{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rule);background:var(--card);border-radius:999px;padding:6px 14px;font-size:13.5px;font-variant-numeric:tabular-nums}
+.act:hover{border-color:var(--ink-3)}
+.act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.act[aria-pressed="true"]{color:var(--like);border-color:var(--like)}
+.act[aria-pressed="true"] svg.heart{fill:currentColor}
+.act.rp[aria-pressed="true"]{color:var(--u-opinion);border-color:var(--u-opinion)}
+
+.cmts{padding-block:26px 120px}
+.cmts-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.cmts-h h2{font-size:18px;font-weight:600;margin:0}
+.sort{font-size:13px;color:var(--ink-3)}
+.sort b{color:var(--ink);font-weight:600}
+.ck{border-bottom:1px solid var(--rule);padding-block:16px;display:grid;gap:6px;transition:background .3s}
+.ck.pulse{background:var(--hl)}
+.ck .meta{font-size:12.5px;color:var(--ink-3);display:flex;gap:8px}
+.ck .meta b{color:var(--ink-2);font-weight:600}
+.ck p{margin:0;font-size:15px;line-height:1.8}
+.ck .acts{border:0;padding:0;margin:4px 0 0}
+.ck .act{padding:3px 11px;font-size:12.5px}
+.ck .act svg{width:14px;height:14px}
+
+.m{text-decoration-line:underline;text-decoration-color:transparent;text-decoration-thickness:2px;text-underline-offset:6px;border-radius:3px;transition:background .2s,text-decoration-color .5s}
+body.sf-ready .m{cursor:pointer}
+body.sf-ready .m[data-t="claim"]{text-decoration-color:var(--u-claim);text-decoration-style:solid}
+body.sf-ready .m[data-t="intent"]{text-decoration-color:var(--u-intent);text-decoration-style:dotted;text-decoration-thickness:3px}
+body.sf-ready .m[data-t="opinion"]{text-decoration-color:var(--u-opinion);text-decoration-style:solid}
+body.sf-ready .m.on{background:var(--hl)}
+
+/* chrome-style side panel, toggled from the toolbar icon */
+.sp{position:fixed;top:calc(var(--tb) + env(safe-area-inset-top,0px));right:0;bottom:0;width:var(--sp);background:var(--panel);border-left:1px solid var(--rule);display:flex;flex-direction:column;z-index:30;
+  padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  transform:translateX(100%);visibility:hidden;transition:transform .4s cubic-bezier(.2,.8,.2,1),visibility 0s .4s}
+body.sf-open .sp{transform:none;visibility:visible;transition:transform .4s cubic-bezier(.2,.8,.2,1),visibility 0s}
+.sp-bar{background:var(--chrome);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px 8px 14px;border-bottom:1px solid var(--rule);font-size:13px}
+.sp-bar .sel{display:flex;align-items:center;gap:8px;font-weight:600}
+.sp-bar .sel i{width:18px;height:18px;border-radius:5px;background:var(--brand);display:grid;place-items:center}
+.sp-bar .sel i::before{content:"";width:8px;height:2px;background:var(--brand-ink);box-shadow:0 -3px 0 var(--brand-ink),0 3px 0 var(--brand-ink)}
+.sp-bar .sel span::after{content:" ▾";color:var(--ink-3);font-weight:400}
+.sp-bar .ic{display:flex;gap:2px}
+.sp-bar .ic button{border:0;background:transparent;width:28px;height:28px;border-radius:6px;color:var(--ink-2)}
+.sp-bar .ic button:hover{background:var(--panel)}
+.sp-bar .ic svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.ph{padding:12px 16px;border-bottom:1px solid var(--rule);display:grid;gap:10px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend s{display:inline-block;width:20px;height:0;text-decoration:none;border-bottom:2px solid}
+.lg-claim{border-color:var(--u-claim)!important}
+.lg-intent{border-color:var(--u-intent)!important;border-bottom-style:dotted!important;border-bottom-width:3px!important}
+.lg-opinion{border-color:var(--u-opinion)!important}
+.stance{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:transparent;padding:4px 10px;font-size:12px}
+.seg button+button{border-left:1px solid var(--rule)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink)}
+.err{font-size:12px;color:var(--warn);width:100%}
+.pb{overflow:auto;padding:14px 16px 18px;display:grid;gap:14px;align-content:start;flex:1}
+.pf{border-top:1px solid var(--rule);padding:10px 16px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.pf a{color:var(--ink-2)}
+
+.now{font-family:var(--f-news);font-size:14px;line-height:1.7;color:var(--ink-2);padding-left:10px;border-left:3px solid var(--rule);border-radius:0}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px}
+.c-claim{background:var(--claim-soft);color:var(--ink-2)}
+.c-intent{background:var(--intent-soft);color:var(--u-intent)}
+.c-opinion{background:var(--opinion-soft);color:var(--u-opinion)}
+.c-ok{background:var(--ok-soft);color:var(--ok)}
+.c-warn{background:var(--warn-soft);color:var(--warn)}
+.c-ai{background:var(--brand-soft);color:var(--brand)}
+.c-human{background:var(--card);color:var(--ink-2);border:1px solid var(--rule)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sec{display:grid;gap:8px}
+.sec h3{margin:0;font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+.txt{margin:0;font-size:14px;color:var(--ink)}
+.muted{color:var(--ink-3);font-size:13px;margin:0}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:12px;display:grid;gap:8px}
+.quote{font-family:var(--f-news);font-size:14.5px;line-height:1.75;margin:0}
+.src{font-size:12px;color:var(--ink-3)}
+.srcbtn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:10px 12px;font-size:13.5px}
+.srcbtn:hover{border-color:var(--brand)}
+.srcbtn em{font-style:normal;font-size:12px;color:var(--brand);white-space:nowrap}
+.srcx{font-size:13px;color:var(--ink-2);background:var(--card);border:1px dashed var(--rule);border-radius:10px;padding:10px 12px;margin-top:-4px}
+.ask{display:flex;gap:8px;align-items:flex-start;background:var(--brand-soft);border-radius:10px;padding:10px 12px}
+.ask p{margin:0;flex:1;font-size:14px;color:var(--ink)}
+.ask button,.lnk{border:1px solid var(--brand);background:transparent;color:var(--brand);border-radius:6px;padding:1px 8px;font-size:12px;white-space:nowrap}
+.cm{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:12px;display:grid;gap:8px}
+.cm.flash{animation:flash 1.6s ease}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--u-opinion)}100%{box-shadow:0 0 0 0 transparent}}
+.cm p{margin:0;font-size:14px;line-height:1.7}
+.who{font-size:12px;color:var(--ink-3)}
+.rate{display:flex;gap:6px;flex-wrap:wrap}
+.rate button{border:1px solid var(--rule);background:transparent;border-radius:6px;padding:3px 9px;font-size:12px;color:var(--ink-2)}
+.rate button:hover{border-color:var(--ink-3)}
+details{border-top:1px solid var(--rule);padding-top:10px}
+summary{font-size:13px;color:var(--ink-2);cursor:pointer}
+details .sec{margin-top:10px}
+textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--rule);border-radius:10px;background:var(--card);color:var(--ink);padding:10px 12px;font:inherit;font-size:14px}
+.go{border:0;background:var(--brand);color:var(--brand-ink);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600}
+.ghost{border:1px solid var(--rule);background:var(--card);border-radius:8px;padding:6px 12px;font-size:13px}
+.check{border-radius:10px;padding:10px 12px;font-size:13.5px;display:grid;gap:8px}
+.check.w{background:var(--warn-soft)}
+.check.o{background:var(--ok-soft)}
+.check b{font-weight:600}
+.sum ul{margin:0;padding-left:18px;font-size:14px}
+.sum li{margin-bottom:4px}
+.rank{display:grid;gap:8px}
+.ri{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:10px 12px}
+.ri .n{font-weight:600;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ri p{margin:0;font-size:13.5px;line-height:1.65}
+.ri .row{margin-top:6px}
+
+/* popup */
+.pop{position:absolute;z-index:40;width:min(340px,calc(100vw - 32px));background:var(--card);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;display:grid;gap:10px;font-size:14px}
+.pop .ptop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pop .x{border:0;background:transparent;width:26px;height:26px;border-radius:6px;color:var(--ink-3);font-size:18px;line-height:1}
+.pop .x:hover{background:var(--panel)}
+.pop p{margin:0;line-height:1.65}
+.pop .acts2{display:flex;gap:6px;flex-wrap:wrap}
+
+.mini{display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);background:var(--ink);color:var(--paper);font-size:13px;padding:8px 14px;border-radius:8px;z-index:60;max-width:calc(100% - 32px)}
+
+@media (max-width:1000px){
+  body.sf-open .page{margin-right:0}
+  body.sf-open .veil{right:0;bottom:48vh}
+  .inner{padding-inline:0}
+  body.sf-open .cmts{padding-bottom:52vh}
+  .url span{display:none}
+  .sp{top:auto;left:0;width:auto;height:48vh;border-left:0;border-top:1px solid var(--rule);border-radius:14px 14px 0 0;overflow:hidden;padding-left:env(safe-area-inset-left,0px);transform:translateY(100%)}
+  body.sf-open .sp{transform:none}
+  .sp.min{height:auto}
+  .sp.min .pb,.sp.min .pf,.sp.min .ph{display:none}
+  .mini{display:inline-grid}
+  .pf{display:none}
+}
+@media (prefers-reduced-motion:reduce){.cm.flash,.hint,.veil .sweep,.skel div{animation:none}.m,.ck,.sp,.page{transition:none}}
+
+/* ---- legibility pass: separate the page from ScrollFact ---- */
+.m{text-decoration-thickness:3px;text-underline-offset:7px}
+body.sf-ready .m[data-t="intent"]{text-decoration-thickness:3px}
+body.sf-ready .m:hover{background:var(--hl)}
+body.sf-ready .m.on[data-t="claim"]{background:var(--claim-soft)}
+body.sf-ready .m.on[data-t="intent"]{background:var(--intent-soft)}
+body.sf-ready .m.on[data-t="opinion"]{background:var(--opinion-soft)}
+.sp{border-left:3px solid var(--sf);box-shadow:-8px 0 24px rgba(24,53,132,.10)}
+.sp-bar{background:var(--sf);color:#fff;border-bottom:0}
+.sp-bar .sel i{background:#fff}
+.sp-bar .sel i::before{background:var(--sf);box-shadow:0 -3px 0 var(--sf),0 3px 0 var(--sf)}
+.sp-bar .sel span::after{color:rgba(255,255,255,.7)}
+.sp-bar .ic button{color:#fff}
+.sp-bar .ic button:hover{background:var(--sf-deep)}
+.ph{border-bottom:1px solid var(--sf-line);background:#F4F7FE}
+.legend{color:var(--ink)}
+.legend s{width:24px;border-bottom-width:3px}
+.pb{background:var(--sf-bg)}
+.pf{border-top:1px solid var(--sf-line);background:#F4F7FE}
+.now{background:var(--card);border:1px solid var(--sf-line);border-left:4px solid var(--ink-3);border-radius:0 8px 8px 0;padding:10px 12px;color:var(--ink);font-size:14.5px}
+.card,.cm,.srcbtn,.ri{border-color:var(--sf-line)}
+.srcx{border-color:var(--sf-line)}
+.sec h3{color:var(--sf-deep);font-size:13.5px}
+.txt{font-size:14.5px;line-height:1.7}
+.chip{font-size:12.5px;padding:3px 10px}
+.c-ai{background:var(--sf);color:#fff}
+.c-human{background:#fff;color:var(--ink);border:1px solid var(--ink-3)}
+.c-claim{background:var(--claim-soft);color:var(--ink)}
+.ask{background:#fff;border:1px solid var(--sf-line);border-left:4px solid var(--sf);border-radius:0 10px 10px 0}
+.seg{border-color:var(--sf-line)}
+.seg button+button{border-left-color:var(--sf-line)}
+/* popup clearly belongs to ScrollFact */
+.pop{background:var(--sf-bg);border:1px solid var(--sf-line);border-top:0;padding:0;gap:0;overflow:hidden}
+.pop .phd{background:var(--sf);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:7px 8px 7px 12px;font-size:12.5px;font-weight:600}
+.pop .phd .lg{display:flex;align-items:center;gap:7px}
+.pop .phd .lg i{width:16px;height:16px;border-radius:4px;background:#fff;display:grid;place-items:center}
+.pop .phd .lg i::before{content:"";width:7px;height:2px;background:var(--sf);box-shadow:0 -3px 0 var(--sf),0 3px 0 var(--sf)}
+.pop .phd .x{color:#fff}
+.pop .phd .x:hover{background:var(--sf-deep)}
+.pop .pbd{padding:12px 14px 14px;display:grid;gap:10px}
+.pop .pbd > p{color:var(--ink)}
+.status{border-color:var(--sf-line)}
+.veil .sweep{opacity:.7}
+
+.iss{display:flex;flex-wrap:wrap;gap:6px}
+.iss button{border:1px solid var(--sf-line);background:#fff;border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--ink)}
+.iss button span{color:var(--ink-3);font-variant-numeric:tabular-nums}
+.iss button[aria-pressed="true"]{background:var(--sf);border-color:var(--sf);color:#fff}
+.iss button[aria-pressed="true"] span{color:rgba(255,255,255,.75)}
+.side{background:#fff;border:1px solid var(--sf-line);border-radius:10px;padding:10px 12px;display:grid;gap:2px}
+.side b{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.side p{margin:0;font-size:14px;line-height:1.65}
+.side.both{background:var(--ok-soft);border-color:transparent}
+.side.both b{color:var(--ok)}
+.ri .n{color:var(--u-opinion)}
+.lnk.fix{border-color:var(--sf-line);color:var(--ink-2)}
+.lnk.fix[aria-pressed="true"]{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.ck{transition:opacity .3s,background .3s}
+.ck.dim{opacity:.32}
+</style>
+
+<div class="tb">
+  <div class="tb-in">
+    <div class="nav" aria-hidden="true">
+      <span><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
+      <span><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+      <span><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-5M19 5v4h-4"/></svg></span>
+    </div>
+    <div class="url"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M9 11V8a3 3 0 0 1 6 0v3"/></svg><b>gaon-news.example</b><span>/school/2026/festival-booths</span></div>
+    <span class="puz" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 4h4v3a1.5 1.5 0 0 0 3 0V7h3v4h-1a1.5 1.5 0 0 0 0 3h1v6h-6v-1a1.5 1.5 0 0 0-3 0v1H4v-6h1a1.5 1.5 0 0 0 0-3H4V7h6z"/></svg></span>
+    <button class="ext" id="sfBtn" aria-pressed="false" aria-label="ScrollFact 켜기"><i aria-hidden="true"></i><span class="hint" id="hint">ScrollFact 켜기</span></button>
+  </div>
+</div>
+
+<div class="veil" id="veil" aria-hidden="true">
+  <div class="sweep"></div>
+  <div class="status" id="status">
+    <div class="st" data-i="0"><span class="dot"></span>문장을 주장, 의도, 의견으로 나누는 중</div>
+    <div class="st" data-i="1"><span class="dot"></span>근거 자료를 찾아 대조하는 중</div>
+    <div class="st" data-i="2"><span class="dot"></span>다른 입장의 이유를 모으는 중</div>
+  </div>
+</div>
+
+<div class="page">
+<div class="inner">
+<div class="demo-note"><b>시연용 가상 기사</b> 학교, 인물, 회의록, 배치표, 댓글은 모두 ScrollFact 시연을 위해 만든 예시입니다.</div>
+<header class="mast">
+  <div class="name">가온소식</div>
+  <nav aria-label="섹션"><span>학교</span><span>동아리</span><span>진로</span><span>오피니언</span></nav>
+</header>
+
+<article id="art">
+  <div class="kicker">학교 · 가온제 2026</div>
+  <h1>부스 12개에서 8개로… 작은 동아리 “올해는 설 자리가 없다”</h1>
+  <p class="sub">학생회 “통로 확보 위한 조치” 해명에도 선정 기준 두고 반발</p>
+  <div class="byline"><span>이서윤 학생기자</span><span>입력 2026.11.03 18:20</span></div>
+  <div class="photo" aria-hidden="true">
+    <svg viewBox="0 0 640 320" preserveAspectRatio="xMidYMid slice">
+      <rect width="640" height="320" fill="var(--claim-soft)"/>
+      <rect x="0" y="240" width="640" height="80" fill="var(--rule)"/>
+      <g fill="var(--card)" stroke="var(--ink-3)" stroke-width="1.5"><rect x="40" y="150" width="110" height="90"/><rect x="170" y="150" width="110" height="90"/><rect x="360" y="150" width="110" height="90"/><rect x="490" y="150" width="110" height="90"/></g>
+      <g fill="var(--brand-soft)"><polygon points="30,150 160,150 95,110"/><polygon points="160,150 290,150 225,110"/><polygon points="350,150 480,150 415,110"/><polygon points="480,150 610,150 545,110"/></g>
+    </svg>
+  </div>
+  <div class="cap">지난해 가온제 부스 배치 모습. 올해는 가운데 통로를 넓히면서 부스 수가 줄었다. (가상 이미지)</div>
+
+  <p><span class="m" tabindex="0" data-id="s1" data-t="claim">올해 가온제의 동아리 부스가 작년 12개에서 8개로 줄었다.</span> 축제는 이달 20일 본관 앞 운동장에서 열린다.</p>
+  <p><span class="m" tabindex="0" data-id="s3" data-t="claim">부스 배정에서 빠진 동아리는 천문부, 보드게임부, 수어부, 문예창작부 4곳으로, 모두 부원이 10명이 안 되는 소규모 동아리다.</span> 이들 동아리는 축제 당일 별도 공간 없이 홍보물만 게시할 수 있다.</p>
+  <p><span class="m" tabindex="0" data-id="s4" data-t="claim">학생회는 지난달 28일 회의에서 “통로 폭을 넓히기 위해 부스 수를 줄였다”고 밝혔다.</span> <span class="m" tabindex="0" data-id="s2" data-t="intent">하지만 결국 학생회가 처음부터 작은 동아리는 신경 쓰지 않았다는 얘기다.</span></p>
+  <p>천문부 2학년 한 학생은 “1년 동안 준비한 관측 체험을 보여줄 곳이 사라졌다”고 말했다. <span class="m" tabindex="0" data-id="s6" data-t="intent">일각에서는 부원이 많은 큰 동아리의 표를 의식한 학생회 선거용 결정이라는 해석도 나온다.</span></p>
+  <p><span class="m" tabindex="0" data-id="s5" data-t="opinion">이런 결정은 축제가 모든 학생의 행사라는 의미를 훼손한다.</span> <span class="m" tabindex="0" data-id="s7" data-t="opinion">안전도 중요하지만, 1년에 한 번뿐인 발표 기회를 빼앗는 방식이어서는 안 된다.</span></p>
+  <div class="end" id="endmark">이서윤 학생기자 · 가온소식 학교면</div>
+
+  <div class="acts">
+    <button class="act" id="artLike" aria-pressed="false"><svg class="heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>공감 <span>213</span></button>
+    <button class="act rp" id="artRp" data-rp="article" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9h12l-3-3M20 15H8l3 3"/></svg>리포스트 <span>47</span></button>
+    <button class="act" id="toCmts"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>댓글 8</button>
+  </div>
+</article>
+
+<section class="cmts" id="cmts" aria-label="댓글">
+  <div class="cmts-h"><h2>댓글 8</h2><span class="sort"><b>공감순</b> · 최신순</span></div>
+  <div id="ckList"></div>
+</section>
+</div>
+</div>
+
+<aside class="sp" id="sp" aria-label="ScrollFact 사이드바">
+  <div class="sp-bar">
+    <div class="sel"><i aria-hidden="true"></i><span>ScrollFact</span></div>
+    <div class="ic">
+      <button class="mini" id="mini" aria-expanded="true" aria-label="사이드바 접기"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button aria-label="고정"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 3H6l4-3zM12 13v7"/></svg></button>
+      <button id="sfClose" aria-label="ScrollFact 끄기"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+  <div class="ph">
+    <div class="legend" aria-label="밑줄 범례">
+      <span><s class="lg-claim"></s>확인 가능한 주장</span>
+      <span><s class="lg-intent"></s>남의 의도를 단정</span>
+      <span><s class="lg-opinion"></s>의견·가치 판단</span>
+    </div>
+    <div class="stance">
+      <span>내 입장</span>
+      <div class="seg" role="group" aria-label="내 입장">
+        <button id="st-club" data-s="club" aria-pressed="false">동아리 쪽</button>
+        <button id="st-council" data-s="council" aria-pressed="false">학생회 쪽</button>
+        <button id="st-none" data-s="none" aria-pressed="false">모르겠음</button>
+      </div>
+      <span class="err" id="stErr" hidden>평가하려면 먼저 내 입장을 골라 주세요. 입장은 평가를 집계할 때만 쓰여요.</span>
+    </div>
+  </div>
+  <div class="pb" id="pb" aria-live="polite"></div>
+  <div class="pf">AI 응답은 시연용 예시 데이터입니다. 의견 노출 방식은 X 커뮤니티 노트의 브리징 알고리즘을 단순화했습니다. 출처: Community Notes, <a href="https://github.com/twitter/communitynotes">github.com/twitter/communitynotes</a></div>
+</aside>
+
+<div class="pop" id="pop" role="dialog" aria-label="ScrollFact 미리보기" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const D = {
+  s1:{t:"claim", status:["ok","자료와 일치"], short:"두 해 배치표를 비교하면 12개에서 8개로 줄었어요.",
+    sources:[
+      {name:"가온제 부스 배치표 (2025)", by:"학생회 게시판", ex:"학생회가 작년 축제 전에 공개한 배치표예요. 운동장 양쪽에 부스 12개가 배치돼 있어요."},
+      {name:"가온제 부스 배치표 (2026)", by:"학생회 게시판", ex:"올해 배치표에는 부스가 8개예요. 두 배치표를 비교하면 본문의 12개에서 8개로 줄었다는 내용과 같아요."}],
+    note:"부스 수가 줄었다는 사실은 확인돼요. 왜 줄였는지는 다음 문장들에서 이어져요."},
+  s3:{t:"claim", status:["warn","일부만 확인"], short:"빠진 동아리가 4곳인 건 맞지만, '모두 부원 10명 미만'은 자료를 찾지 못했어요.",
+    sources:[{name:"가온제 부스 배치표 (2026)", by:"학생회 게시판", ex:"작년에 있던 천문부, 보드게임부, 수어부, 문예창작부가 올해 배치표에 없어요. 빠진 동아리가 4곳이라는 내용은 일치해요."}],
+    note:"'모두 부원이 10명이 안 된다'는 부분은 공개된 자료를 찾지 못했어요.",
+    more:"교무부 동아리 등록 명부에서 동아리별 부원 수를 확인할 수 있어요."},
+  s4:{t:"claim", status:["ok","자료와 일치"], short:"회의록과 일치해요. 다만 회의록에 있는 선정 기준이 기사에는 빠져 있어요.",
+    sources:[{name:"학생회 정기회의록 (10월 28일) 2쪽", by:"학생회 게시판", ex:"학생회가 회의 직후 공개한 회의록이에요. 부스 감축 이유를 '통로 폭 확보'로 적고 있어 본문 인용과 같아요."}],
+    note:"회의록에는 참가 동아리 선정 기준(작년 운영 실적, 신청 순서)도 적혀 있는데, 기사에는 이 부분이 빠져 있어요."},
+  s2:{t:"intent", short:"학생회의 속마음은 자료로 확인되지 않아요. 학생회는 통로 확보와 선정 기준을 이유로 밝혔어요.",
+    reason:{q:"통로 폭 1.5m를 확보하려면 부스를 8개까지 줄여야 했습니다. 참가 동아리는 작년 운영 실적과 신청 순서로 정했습니다.", src:"학생회 정기회의록 (10월 28일) 2쪽", ex:"학생회가 공개한 회의록에서 결정 이유와 선정 기준을 밝힌 대목이에요."},
+    unknown:"'처음부터 신경 쓰지 않았다'는 학생회의 속마음은 회의록이나 다른 자료로 확인되지 않아요. 확인되는 것은 부스가 줄었다는 결과와 학생회가 밝힌 기준이에요.",
+    asks:["작년 운영 실적 기준은 언제, 어디에 공지됐나요?","실적 기준이 부원이 적은 동아리에 불리하지 않은지 검토했나요?"]},
+  s6:{t:"intent", short:"누가 한 해석인지, 무엇을 근거로 했는지 기사에 없어요.",
+    reason:null,
+    unknown:"이 해석을 누가 했는지 기사에 나오지 않고, 이를 뒷받침하는 자료나 당사자 발언도 찾지 못했어요. 회의록에 적힌 선정 기준에는 부원 수 항목이 없어요.",
+    asks:["(기자에게) '선거용'이라고 본 근거를 함께 실어 줄 수 있나요?","(학생회에게) 선정 기준을 정할 때 부원 수를 고려했나요?"]},
+  k1:{t:"intent", short:"'원래 큰 동아리만 챙긴다'는 건 자료로 확인되지 않은 해석이에요.",
+    reason:{q:"참가 동아리는 작년 운영 실적과 신청 순서로 정했습니다.", src:"학생회 정기회의록 (10월 28일) 2쪽", ex:"학생회가 밝힌 선정 기준이에요. 이 기준이 작은 동아리에 불리했는지는 따져 볼 수 있는 질문이에요."},
+    unknown:"학생회가 큰 동아리만 챙긴다는 의도는 확인되지 않아요. 다만 '운영 실적' 기준이 결과적으로 작은 동아리에 불리했을 가능성은 확인해 볼 만해요.",
+    asks:["운영 실적 기준이 작은 동아리에 불리하게 작동한 건 아닌지 학생회에 물어볼까요?","큰 동아리만 챙긴다고 느낀 일이 있었다면 구체적으로 적어 주실래요?"]},
+  s5:{t:"opinion", short:"글쓴이의 가치 판단이에요. 안전과 참여 중 무엇을 더 무겁게 보느냐에 따라 갈려요.",
+    ai:"글쓴이의 가치 판단이에요. 같은 사실을 두고도 안전한 운영과 모두의 참여 중 무엇을 더 무겁게 보느냐에 따라 의견이 갈려요."},
+  s7:{t:"opinion", short:"안전을 인정하면서 발표 기회를 지키자는 의견이라, 대안을 함께 찾을 여지가 있어요.",
+    ai:"글쓴이의 제안이 담긴 의견이에요. 안전이라는 학생회의 이유를 인정하면서 발표 기회를 지키자는 주장이라, 대안을 함께 찾을 여지가 있어요."}
+};
+const NOTES = [
+  {id:"c1", on:"s5", who:"ScrollFact 이용자 · 동아리 쪽", text:"신청했는데 탈락했다는 연락조차 못 받았어요. 저희에겐 1년에 한 번 발표하는 자리예요.", r:{club:[9,0],council:[5,1]}},
+  {id:"c2", on:"s5", who:"ScrollFact 이용자 · 학생회 쪽", text:"작년엔 통로가 막혀서 넘어질 뻔한 학생이 있었어요. 다만 선정 기준을 미리 알리지 못한 건 저희가 잘못했어요.", r:{club:[6,1],council:[8,0]}},
+  {id:"c3", on:"s5", who:"ScrollFact 이용자 · 동아리 쪽", text:"학생회는 원래 큰 동아리만 챙겨요. 뻔하죠.", r:{club:[7,1],council:[0,6]}},
+  {id:"c4", on:"s5", who:"ScrollFact 이용자 · 학생회 쪽", text:"불만 있으면 내년에 일찍 신청하면 됩니다.", r:{club:[0,7],council:[4,1]}},
+  {id:"c5", on:"s7", who:"ScrollFact 이용자 · 입장 없음", text:"부스 대신 강당에서 30분씩 발표 무대를 따로 연 학교도 있어요. 공간이 아니라 시간을 나누는 방법도 있을 것 같아요.", r:{club:[5,0],council:[4,1]}},
+  {id:"c6", on:"s7", who:"ScrollFact 이용자 · 학생회 쪽", text:"통로 폭은 안전 담당 선생님 의견을 따른 거라 저희가 마음대로 바꾸기 어려워요. 대신 작은 동아리 4곳이 함께 쓰는 공동 부스는 다음 회의에 올려 볼게요.", r:{club:[2,0],council:[5,0]}}
+];
+const CK = [
+  {id:"k1", iss:"intent", sent:"s2", user:"별보는밤", time:"2시간 전", html:`<span class="m" tabindex="0" data-id="k1" data-t="intent">학생회는 원래 큰 동아리만 챙김. 뻔하지 ㅋㅋ</span>`, like:{club:120,council:8}, rp:31},
+  {id:"k2", iss:"safe", sent:"s4", user:"통로지킴이", time:"2시간 전", html:`안전 때문이라는데 작년에 진짜 통로 막혀서 위험했음. 기사가 너무 한쪽 얘기만 함`, like:{club:10,council:64}, rp:9},
+  {id:"k5", iss:"rule", sent:"s3", user:"3학년4반", time:"1시간 전", html:`불만이면 내년에 일찍 신청하든가`, like:{club:4,council:48}, rp:2},
+  {id:"k3", iss:"alt", sent:"s7", user:"관측대장", time:"1시간 전", html:`천문부 관측 체험 작년에 재밌었는데 아쉽다. 강당이나 다른 시간에라도 할 수 없나?`, like:{club:22,council:19}, rp:3},
+  {id:"k8", iss:"intent", sent:"s2", user:"축제준비위", time:"1시간 전", html:`통로 폭은 안전 담당 쌤이 정한 거라던데 학생회만 탓할 일은 아닌 듯`, like:{club:5,council:30}, rp:4},
+  {id:"k4", iss:"rule", sent:"s4", user:"새내기부장", time:"50분 전", html:`선정 기준이 운영 실적이면 새로 생긴 동아리는 계속 못 들어가는 거 아님?`, like:{club:20,council:14}, rp:5},
+  {id:"k7", iss:"rule", sent:"s3", user:"보드게임러", time:"40분 전", html:`보드게임부 부원 15명 넘는데? 기사에 '모두 10명 미만'은 틀린 듯`, like:{club:6,council:11}, rp:2},
+  {id:"k6", iss:"rule", sent:"s4", user:"중간어딘가", time:"30분 전", html:`학생회도 기준 공지 늦게 한 건 인정했으면 좋겠고, 동아리도 안전 문제는 알아줬으면`, like:{club:9,council:9}, rp:1}
+];
+const ISSUES = [
+  {id:"rule", name:"선정 기준과 통보", sents:["s3","s4"], club:"기준이 무엇인지 몰랐고, 탈락했다는 통보도 받지 못했다.", council:"신청 순서와 작년 운영 실적은 미리 정해 둔 기준이다.", both:"기준 공지가 늦었다는 점은 양쪽 댓글이 모두 인정해요. '모두 10명 미만'이라는 기사 내용을 바로잡는 댓글도 양쪽에서 공감을 받았어요."},
+  {id:"safe", name:"안전과 통로", sents:["s1","s4"], club:"안전은 이해하지만, 그 부담이 작은 동아리에만 돌아갔다.", council:"작년에 통로가 막혀 실제로 위험했다.", both:"통로를 넓혀야 했다는 점에 반대하는 댓글은 없어요."},
+  {id:"intent", name:"학생회의 의도", sents:["s2","s6"], club:"결과를 보면 작은 동아리를 가볍게 본 것 같다.", council:"안전 담당 선생님 의견을 따른 결정인데 의도를 몰아간다.", both:"의도를 뒷받침하는 자료는 어느 쪽 댓글에도 없어요."},
+  {id:"alt", name:"대안", sents:["s5","s7"], club:"강당이나 다른 시간에라도 발표하고 싶다.", council:"공간은 늘리기 어렵지만 공동 부스는 검토할 수 있다.", both:"공간 대신 시간을 나누는 방법에 양쪽 공감이 모여요."}
+];
+const SUMMARY = {
+  agreed:["부스가 12개에서 8개로 줄었다.","학생회는 감축 이유를 통로 폭 확보라고 공개했다.","동아리 4곳이 부스 배정에서 빠졌다."],
+  open:["작년 운영 실적 기준이 작은 동아리에게 공정했나?","탈락 사실을 언제, 어떻게 알렸나?","공간 대신 시간을 나누거나 공동 부스를 쓰는 대안이 가능한가?"],
+  unverified:["학생회가 처음부터 작은 동아리를 신경 쓰지 않았다.","큰 동아리 표를 의식한 선거용 결정이다."]
+};
+const LABEL = {claim:"확인 가능한 주장", intent:"남의 의도를 단정", opinion:"의견·가치 판단"};
+const SIDE = {club:"동아리 쪽", council:"학생회 쪽", none:"입장 없음"};
+const HEART = `<svg class="heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
+const RP = `<svg viewBox="0 0 24 24"><path d="M4 9h12l-3-3M20 15H8l3 3"/></svg>`;
+
+let issueSel = "all", fixReq = new Set(), ready = false, busy = false, stance = null, active = null, rated = new Set(), promoted = null, mine = [], openSrc = new Set(), liked = new Set(), reposted = new Set();
+const pb = document.getElementById("pb"), pop = document.getElementById("pop");
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const narrow = () => matchMedia("(max-width:1000px)").matches;
+const total = k => k.like.club + k.like.council;
+
+/* ---------- page comments (site native, sorted by likes) ---------- */
+function renderComments(){
+  const list = document.getElementById("ckList");
+  const sorted = [...CK].sort((a,b) => total(b) - total(a));
+  list.innerHTML = sorted.map(k => `<div class="ck" id="ck-${k.id}">
+    <div class="meta"><b>${esc(k.user)}</b><span>${k.time}</span></div>
+    <p>${k.html}</p>
+    <div class="acts">
+      <button class="act" data-like="${k.id}" aria-pressed="${liked.has(k.id)}">${HEART}<span>${total(k)}</span></button>
+      <button class="act rp" data-rp="${k.id}" aria-pressed="${reposted.has(k.id)}">${RP}<span>${k.rp}</span></button>
+    </div></div>`).join("");
+  bindMarks();
+}
+const bridgedK = k => { const t = total(k); return t >= 10 && k.like.club/t >= .25 && k.like.council/t >= .25; };
+const leanK = k => k.like.club > k.like.council ? "동아리 쪽에서 주로 공감" : "학생회 쪽에서 주로 공감";
+const stripH = s => s.replace(/<[^>]+>/g,"");
+const issueOf = id => ISSUES.find(i => i.id === id);
+const sentText = sid => { const m = document.querySelector(`#art .m[data-id="${sid}"]`); return m ? m.textContent : ""; };
+function cmtItem(k){
+  const b = bridgedK(k), fixed = fixReq.has(k.id);
+  return `<div class="ri"><span class="n" aria-hidden="true">${b?"◆":"◇"}</span><div><p>${esc(stripH(k.html))}</p>
+    <div class="row"><span class="chip ${b?"c-opinion":"c-claim"}">${b?"양쪽 모두 공감":leanK(k)}</span><span class="who">${esc(k.user)}</span></div>
+    <div class="row"><button class="lnk" data-jump="${k.id}">댓글로 이동</button><button class="lnk fix" data-fix="${k.id}" aria-pressed="${fixed}">${fixed?"연결 수정 요청함":"다른 내용에 대한 댓글이에요"}</button></div></div></div>`;
+}
+const sortB = arr => [...arr].sort((a,b) => (bridgedK(b)-bridgedK(a)) || (Math.min(b.like.club,b.like.council) - Math.min(a.like.club,a.like.council)));
+function applyDim(){
+  const on = ready && active === "comments" && issueSel !== "all";
+  CK.forEach(k => { const el = document.getElementById("ck-"+k.id); el && el.classList.toggle("dim", on && k.iss !== issueSel); });
+}
+
+/* ---------- ScrollFact notes (bridging) ---------- */
+function bridged(c){ return ["club","council"].every(k => { const [f,u] = c.r[k]; const n = f+u; return n >= 3 && f/n >= .67; }); }
+function oneSided(c){ const ok = k => { const [f,u] = c.r[k]; return f+u >= 3 && f/(f+u) >= .67; };
+  return ok("club") ? "동아리 쪽에서만 공감" : ok("council") ? "학생회 쪽에서만 공감" : "아직 평가가 모이는 중"; }
+
+function srcBlock(key, s){ const open = openSrc.has(key);
+  return `<button class="srcbtn" data-src="${key}" aria-expanded="${open}"><span>${esc(s.name)}<br><span class="muted" style="font-size:12px">${esc(s.by)}</span></span><em>${open?"접기":"자료 설명"}</em></button>` + (open ? `<div class="srcx">${esc(s.ex)}</div>` : ""); }
+const askBlock = a => `<div class="ask"><p>${esc(a)}</p><button data-copy="${esc(a)}">복사</button></div>`;
+function noteBlock(c, top){ const done = rated.has(c.id);
+  return `<div class="cm${promoted===c.id?" flash":""}" id="cm-${c.id}">
+    <div class="row"><span class="chip c-human">사람이 보탬</span>${top?`<span class="chip c-opinion">양쪽 입장 모두 공정하다고 평가</span>`:`<span class="chip c-claim">${oneSided(c)}</span>`}</div>
+    <p>${esc(c.text)}</p><div class="who">${esc(c.who)}</div>
+    <div class="rate">${done?`<span class="muted" style="font-size:12px">평가했어요</span>`:`<button data-rate="${c.id}" data-v="1">공정하게 썼어요</button><button data-rate="${c.id}" data-v="0">한쪽으로 치우쳤어요</button>`}</div></div>`; }
+const composeBlock = id => `<div class="sec"><h3>내 경험이나 다른 입장 보태기</h3>
+  <textarea id="ta-${id}" placeholder="우리 동아리는 마감 하루 전에 신청했는데 결과 공지를 못 봤어요."></textarea>
+  <div class="row"><button class="go" data-post="${id}">게시 전 확인</button><span class="muted" style="font-size:12px">AI가 표현을 먼저 살펴봐요</span></div>
+  <div id="chk-${id}"></div></div>`;
+
+function render(){
+  if (!active) return;
+  if (active === "summary"){
+    pb.innerHTML = `<div class="row"><span class="chip c-ai">AI 쟁점 정리</span></div>
+      <p class="txt">기사 전체에서 사실, 남은 질문, 확인되지 않은 해석을 나눠 봤어요.</p>
+      <div class="card sum"><h3 style="margin:0;font-size:13px;color:var(--ok)">양쪽 모두 인정하는 사실</h3><ul>${SUMMARY.agreed.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+      <div class="card sum"><h3 style="margin:0;font-size:13px;color:var(--u-opinion)">실제로 따져 볼 쟁점</h3><ul>${SUMMARY.open.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+      <div class="card sum"><h3 style="margin:0;font-size:13px;color:var(--u-intent)">자료로 확인되지 않은 해석</h3><ul>${SUMMARY.unverified.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+      <p class="muted">질문이 '누구의 의도가 나빴나'에서 '어떤 기준이 공정했나'로 옮겨 가면, 양쪽이 같은 질문에 답할 수 있어요.</p>`;
+    return;
+  }
+  if (active === "comments"){
+    const chips = `<div class="iss" role="group" aria-label="쟁점">${[{id:"all",name:"전체"},...ISSUES].map(i => `<button data-issue="${i.id}" aria-pressed="${issueSel===i.id}">${i.name} <span>${i.id==="all"?CK.length:CK.filter(k=>k.iss===i.id).length}</span></button>`).join("")}</div>`;
+    let h = `<div class="row"><span class="chip c-ai">댓글 살펴보기</span></div>
+      <p class="txt">AI가 댓글 ${CK.length}개를 기사의 어떤 내용에 대한 것인지 쟁점별로 묶었어요. 쟁점을 누르면 관련 문장과 사람들의 의견을 함께 볼 수 있어요.</p>${chips}`;
+    if (issueSel === "all"){
+      const byLike = [...CK].sort((a,b) => total(b)-total(a));
+      h += `<div class="card"><p class="txt" style="margin:0">이 사이트는 공감 수로 댓글을 정렬해요. 지금 공감 1위 댓글은 <b style="font-weight:600">${leanK(byLike[0]).replace(" 주로","만")}</b> 받았고, 자료로 확인되지 않은 의도 단정이 들어 있어요.</p></div>
+        <div class="sec"><h3>쟁점별 댓글</h3>${ISSUES.map(i => { const ks = CK.filter(k=>k.iss===i.id), nb = ks.filter(bridgedK).length;
+          return `<button class="srcbtn" data-issue="${i.id}"><span>${i.name}<br><span class="muted" style="font-size:12px">댓글 ${ks.length}개 · 양쪽 공감 ${nb}개</span></span><em>보기</em></button>`; }).join("")}</div>`;
+    } else {
+      const i = issueOf(issueSel), ks = sortB(CK.filter(k => k.iss === i.id));
+      h += `<div class="sec"><h3>관련 기사 문장</h3>${i.sents.map(sid => `<button class="srcbtn" data-goto="${sid}"><span style="font-family:var(--f-news)">${esc(sentText(sid))}</span><em>기사로</em></button>`).join("")}</div>
+        <div class="sec"><h3>사람들의 의견</h3>
+          <div class="side"><b>동아리 쪽 댓글의 이유</b><p>${esc(i.club)}</p></div>
+          <div class="side"><b>학생회 쪽 댓글의 이유</b><p>${esc(i.council)}</p></div>
+          <div class="side both"><b>양쪽이 함께 인정하는 것</b><p>${esc(i.both)}</p></div>
+          <p class="muted">AI가 댓글들을 읽고 정리한 요약이에요. 아래 원래 댓글과 맞는지 직접 확인해 보세요.</p></div>
+        <div class="sec"><h3>이 쟁점의 댓글 ${ks.length}개</h3><div class="rank">${ks.map(cmtItem).join("")}</div></div>`;
+    }
+    h += `<p class="muted">◆ 양쪽 입장에서 함께 공감한 댓글. 공감한 사람의 입장은 ScrollFact 이용자가 고른 입장으로 집계했어요. 사이트 댓글 순서는 바꾸지 않아요.</p>`;
+    pb.innerHTML = h; applyDim();
+    return;
+  }
+  const d = D[active], el = document.querySelector(`.m[data-id="${active}"]`);
+  let h = `<div class="now">${esc(el.textContent)}</div>
+    <div class="row"><span class="chip c-${d.t}">${LABEL[d.t]}</span>${d.status?`<span class="chip c-${d.status[0]}">${d.status[1]}</span>`:""}<span class="chip c-ai">AI 분석</span></div>`;
+  if (d.t === "claim"){
+    h += `<div class="sec"><h3>근거 자료</h3>${d.sources.map((s,i)=>srcBlock(active+"-"+i,s)).join("")}</div><p class="txt">${esc(d.note)}</p>`;
+    if (d.more) h += `<div class="sec"><h3>더 확인할 자료</h3><p class="muted">${esc(d.more)}</p></div>`;
+  }
+  if (d.t === "intent"){
+    h += `<div class="sec"><h3>당사자가 밝힌 이유</h3>` + (d.reason
+      ? `<div class="card"><p class="quote">“${esc(d.reason.q)}”</p><div class="src">${esc(d.reason.src)}</div></div>${srcBlock(active+"-r",{name:d.reason.src,by:"학생회 게시판",ex:d.reason.ex})}`
+      : `<p class="muted">당사자가 직접 밝힌 이유를 찾지 못했어요.</p>`) + `</div>`;
+    h += `<div class="sec"><h3>자료로 확인되지 않는 것</h3><p class="txt">${esc(d.unknown)}</p></div>`;
+    h += `<div class="sec"><h3>단정 대신 이렇게 물어보면?</h3>${d.asks.map(askBlock).join("")}</div>` + composeBlock(active);
+  }
+  if (d.t === "opinion"){
+    const list = NOTES.filter(c => c.on === active), top = list.filter(bridged), rest = list.filter(c => !bridged(c)), my = mine.filter(m => m.on === active);
+    h += `<p class="txt">${esc(d.ai)}</p>`;
+    h += `<div class="sec"><h3>다른 입장의 이유</h3>${top.length?top.map(c=>noteBlock(c,true)).join(""):`<p class="muted">아직 양쪽 모두가 공정하다고 평가한 의견이 없어요.</p>`}</div>`;
+    if (rest.length || my.length) h += `<details${promoted||my.length?" open":""}><summary>아직 한쪽에서만 공감한 의견 ${rest.length+my.length}개</summary><div class="sec">${rest.map(c=>noteBlock(c,false)).join("")}${my.map(m=>`<div class="cm"><div class="row"><span class="chip c-human">내가 보탬</span><span class="chip c-claim">평가 대기 중</span></div><p>${esc(m.text)}</p><div class="who">${esc(SIDE[m.side]||"입장 미선택")}</div></div>`).join("")}</div></details>`;
+    h += composeBlock(active);
+  }
+  const rel = sortB(CK.filter(k => k.sent === active));
+  if (rel.length){ const iss = issueOf(rel[0].iss);
+    h += `<div class="sec"><h3>이 문장에 대한 댓글 ${rel.length}개</h3><div class="rank">${rel.map(cmtItem).join("")}</div>
+      <button class="srcbtn" data-issue="${iss.id}" data-open="1"><span>쟁점 '${iss.name}'의 의견 모두 보기</span><em>보기</em></button></div>`; }
+  pb.innerHTML = h; promoted = null; applyDim();
+}
+
+function setActive(id, force){
+  if (id === active && !force) return;
+  active = id;
+  document.querySelectorAll(".m").forEach(m => m.classList.toggle("on", m.dataset.id === id));
+  render(); pb.scrollTop = 0;
+}
+
+/* ---------- scroll sync (article sentences, summary, comments) ---------- */
+function onScroll(){
+  if (!ready) return;
+  const line = innerHeight * (narrow() ? .28 : .4);
+  if (document.getElementById("cmts").getBoundingClientRect().top < line){ if (!active || (active !== "comments" && !active.startsWith("k"))) setActive("comments"); return; }
+  if (document.getElementById("endmark").getBoundingClientRect().top < line) return setActive("summary");
+  const marks = [...document.querySelectorAll("#art .m")];
+  let pick = marks[0];
+  for (const m of marks) if (m.getBoundingClientRect().top <= line) pick = m;
+  setActive(pick.dataset.id);
+}
+let tick = false;
+addEventListener("scroll", () => { if (!tick){ tick = true; requestAnimationFrame(() => { tick = false; onScroll(); }); } }, {passive:true});
+addEventListener("resize", () => { closePop(); onScroll(); });
+
+/* ---------- popup ---------- */
+function placePop(anchor){
+  pop.hidden = false;
+  const r = anchor.getBoundingClientRect(), w = pop.offsetWidth;
+  const rightLimit = (narrow() || !document.body.classList.contains("sf-open") ? innerWidth : innerWidth - document.getElementById("sp").offsetWidth) - 16;
+  const left = Math.max(16, Math.min(r.left, rightLimit - w));
+  pop.style.left = (left + scrollX) + "px";
+  pop.style.top = (r.bottom + scrollY + 10) + "px";
+}
+function closePop(){ pop.hidden = true; pop.innerHTML = ""; }
+const PHD = t => `<div class="phd"><span class="lg"><i aria-hidden="true"></i>${t}</span><button class="x" data-close aria-label="닫기">×</button></div>`;
+function openMarkPop(m){
+  const id = m.dataset.id, d = D[id];
+  let body = `<p>${esc(d.short)}</p>`;
+  if (d.t === "intent") body += askBlock(d.asks[0]);
+  const nC = CK.filter(k => k.sent === id).length;
+  if (d.t === "opinion"){ const top = NOTES.filter(c => c.on === id && bridged(c))[0];
+    if (top) body += `<div class="cm"><div class="row"><span class="chip c-opinion">양쪽 입장 모두 공정하다고 평가</span></div><p>${esc(top.text)}</p><div class="who">${esc(top.who)}</div></div>`; }
+  pop.innerHTML = `${PHD("ScrollFact")}<div class="pbd"><div class="row"><span class="chip c-${d.t}">${LABEL[d.t]}</span>${d.status?`<span class="chip c-${d.status[0]}">${d.status[1]}</span>`:""}</div>${body}
+    ${nC?`<p class="muted">이 문장에 대한 댓글이 ${nC}개 있어요. 사이드바에서 의견과 함께 볼 수 있어요.</p>`:""}
+    <div class="acts2"><button class="go" data-side="${id}">사이드바에서 자세히</button></div></div>`;
+  placePop(m);
+}
+function openRepostPop(btn){
+  const id = btn.dataset.rp;
+  if (!ready || reposted.has(id)){ return doRepost(btn, false); }
+  let warn = "";
+  if (id === "article") warn = `이 기사에는 자료로 확인되지 않은 해석이 <b>2곳</b> 있어요 (보라 점선). 학생회가 밝힌 선정 기준은 기사에 빠져 있어요.`;
+  else if (id === "k1") warn = `이 댓글에는 자료로 확인되지 않은 의도 단정이 있어요. 학생회가 밝힌 선정 기준과 함께 보면 따져 볼 질문이 달라져요.`;
+  if (!warn) return doRepost(btn, false);
+  pop.innerHTML = `${PHD("ScrollFact · 공유 전 확인")}<div class="pbd">
+    <p>${warn}</p><p class="muted">공유할지는 직접 정해요. 쟁점 정리를 함께 붙이면 읽는 사람이 사실과 해석을 나눠 볼 수 있어요.</p>
+    <div class="acts2"><button class="go" data-rpgo="${id}" data-ctx="1">쟁점 정리와 함께 리포스트</button><button class="ghost" data-rpgo="${id}" data-ctx="0">그대로 리포스트</button></div></div>`;
+  placePop(btn);
+}
+function doRepost(btn, ctx){
+  const id = btn.dataset.rp, span = btn.querySelector("span"), on = !reposted.has(id);
+  on ? reposted.add(id) : reposted.delete(id);
+  span.textContent = +span.textContent + (on ? 1 : -1);
+  btn.setAttribute("aria-pressed", on);
+  if (id !== "article"){ const k = CK.find(x => x.id === id); k.rp += on ? 1 : -1; }
+  closePop();
+  toast(on ? (ctx ? "쟁점 정리를 붙여 리포스트했어요" : "리포스트했어요") : "리포스트를 취소했어요");
+}
+function rpBtn(id){ return document.querySelector(`[data-rp="${id}"]`); }
+
+pop.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.hasAttribute("data-close")) return closePop();
+  if (t.dataset.side){ setActive(t.dataset.side, true); closePop(); if (narrow()) document.getElementById("sp").classList.remove("min"); return; }
+  if (t.dataset.rpgo){ return doRepost(rpBtn(t.dataset.rpgo), t.dataset.ctx === "1"); }
+  if (t.dataset.copy !== undefined) return copy(t);
+});
+document.addEventListener("click", e => { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest(".m,[data-rp]")) closePop(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePop(); });
+
+function bindMarks(){
+  document.querySelectorAll(".m").forEach(m => {
+    if (m.dataset.bound) return; m.dataset.bound = 1;
+    const go = () => { if (!ready) return; setActive(m.dataset.id); openMarkPop(m); };
+    m.addEventListener("click", go);
+    m.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); go(); } });
+  });
+}
+
+/* ---------- page actions: likes, reposts ---------- */
+document.querySelector(".page").addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.id === "artLike"){ const on = t.getAttribute("aria-pressed") !== "true", s = t.querySelector("span"); s.textContent = +s.textContent + (on?1:-1); t.setAttribute("aria-pressed", on); return; }
+  if (t.id === "toCmts"){ document.getElementById("cmts").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); return; }
+  if (t.dataset.like){ const k = CK.find(x => x.id === t.dataset.like), on = !liked.has(k.id);
+    const side = stance === "council" ? "council" : stance === "club" ? "club" : (k.like.club >= k.like.council ? "club" : "council");
+    on ? liked.add(k.id) : liked.delete(k.id); k.like[side] += on ? 1 : -1;
+    t.querySelector("span").textContent = total(k); t.setAttribute("aria-pressed", on);
+    if (active === "comments") render(); return; }
+  if (t.dataset.rp){ e.stopPropagation(); openRepostPop(t); }
+});
+
+/* ---------- side panel actions ---------- */
+document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", () => {
+  stance = b.dataset.s; document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  document.getElementById("stErr").hidden = true;
+}));
+const toastEl = document.getElementById("toast"); let tt;
+function toast(msg){ toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(tt); tt = setTimeout(() => toastEl.hidden = true, 2600); }
+function selectText(el){ if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+function copy(t){ const txt = t.dataset.copy;
+  try { navigator.clipboard.writeText(txt).then(() => { t.textContent = "복사됨"; }, () => selectText(t.previousElementSibling)); } catch(_) { selectText(t.previousElementSibling); } }
+
+const INTENT_RE = /(무시|일부러|원래|뻔하|뻔히|속셈|챙기|챙김|노리|노린|선거용|관심도\s*없|신경\s*(도|조차)?\s*안|안중|대놓고)/;
+pb.addEventListener("click", e => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.src){ const k = t.dataset.src; openSrc.has(k) ? openSrc.delete(k) : openSrc.add(k); const st = pb.scrollTop; render(); pb.scrollTop = st; return; }
+  if (t.dataset.copy !== undefined) return copy(t);
+  if (t.dataset.issue){
+    issueSel = t.dataset.issue;
+    if (t.dataset.open){ document.getElementById("cmts").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); }
+    active = "comments"; document.querySelectorAll(".m.on").forEach(m => m.classList.remove("on")); render(); pb.scrollTop = 0; return; }
+  if (t.dataset.goto){ const m = document.querySelector(`#art .m[data-id="${t.dataset.goto}"]`);
+    scrollTo({top: m.getBoundingClientRect().top + scrollY - innerHeight*(narrow()?.22:.34), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); return; }
+  if (t.dataset.fix){ const id = t.dataset.fix; fixReq.has(id) ? fixReq.delete(id) : fixReq.add(id);
+    if (fixReq.has(id)) toast("연결 수정을 요청했어요. 다른 이용자들이 확인하면 반영돼요");
+    const st = pb.scrollTop; render(); pb.scrollTop = st; return; }
+  if (t.dataset.jump){ const el = document.getElementById("ck-"+t.dataset.jump); el.scrollIntoView({block:"center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"}); el.classList.add("pulse"); setTimeout(() => el.classList.remove("pulse"), 1400); return; }
+  if (t.dataset.rate){
+    if (!stance){ document.getElementById("stErr").hidden = false; return; }
+    const c = NOTES.find(x => x.id === t.dataset.rate), before = bridged(c);
+    if (stance !== "none") c.r[stance][t.dataset.v === "1" ? 0 : 1]++;
+    rated.add(c.id);
+    if (!before && bridged(c)){ promoted = c.id; toast("양쪽 입장에서 공정하다는 평가를 받아 위로 올라갔어요"); }
+    else toast(stance === "none" ? "평가했어요. 입장을 고르지 않은 평가는 노출 판단에 쓰이지 않아요" : "평가했어요");
+    const st = pb.scrollTop; render(); pb.scrollTop = st; return;
+  }
+  if (t.dataset.post){
+    const id = t.dataset.post, ta = document.getElementById("ta-"+id), box = document.getElementById("chk-"+id), v = ta.value.trim();
+    if (!v){ box.innerHTML = `<div class="check w">먼저 내용을 적어 주세요.</div>`; ta.focus(); return; }
+    const notes = [];
+    if (INTENT_RE.test(v)) notes.push(`<div><b>상대의 속마음을 단정하는 표현이 있어요.</b> 확인된 일과 묻고 싶은 것으로 나눠 볼까요? 예: “우리 동아리는 탈락했어요. 선정 기준이 무엇이었는지 알고 싶어요.”</div>`);
+    if (/\d/.test(v)) notes.push(`<div><b>숫자가 들어간 주장이 있어요.</b> 출처를 함께 적으면 '확인 가능한 주장'으로 표시되고, AI가 자료와 대조해요.</div>`);
+    if (notes.length) box.innerHTML = `<div class="check w">${notes.join("")}<div class="row"><button class="go" data-force="${id}">그래도 게시</button><span class="muted" style="font-size:12px">고쳐 쓰면 다시 확인해요</span></div></div>`;
+    else post(id, v);
+    return;
+  }
+  if (t.dataset.force) post(t.dataset.force, document.getElementById("ta-"+t.dataset.force).value.trim());
+});
+pb.addEventListener("input", e => { if (e.target.tagName === "TEXTAREA"){ const box = document.getElementById("chk-"+e.target.id.slice(3)); if (box) box.innerHTML = ""; } });
+function post(id, v){
+  if (D[id].t === "opinion"){ mine.push({on:id, text:v, side:stance}); render(); toast("게시 대기 중이에요. 양쪽 입장에서 공정하다는 평가를 받으면 위로 올라가요"); }
+  else { document.getElementById("chk-"+id).innerHTML = `<div class="check o">보탠 내용은 '개인 경험(미확인)'으로 표시돼 이 문장에 연결돼요. 확인할 수 있는 주장이 있으면 AI가 자료와 대조해요.</div>`; document.getElementById("ta-"+id).value = ""; }
+}
+document.getElementById("mini").addEventListener("click", e => {
+  const sp = document.getElementById("sp"), min = sp.classList.toggle("min"), b = e.currentTarget;
+  b.setAttribute("aria-expanded", !min); b.setAttribute("aria-label", min ? "사이드바 펼치기" : "사이드바 접기");
+  b.style.transform = min ? "rotate(180deg)" : "";
+});
+
+/* ---------- extension on / off ---------- */
+const body = document.body, sfBtn = document.getElementById("sfBtn"), steps = [...document.querySelectorAll("#status .st")];
+const wait = ms => new Promise(r => setTimeout(r, matchMedia("(prefers-reduced-motion: reduce)").matches ? Math.min(ms, 150) : ms));
+async function turnOn(){
+  if (busy) return; busy = true;
+  document.getElementById("hint")?.remove();
+  sfBtn.setAttribute("aria-pressed", "true"); sfBtn.setAttribute("aria-label", "ScrollFact 끄기");
+  document.getElementById("sp").classList.remove("min");
+  pb.innerHTML = `<div class="skel"><div style="width:70%"></div><div></div><div style="width:85%"></div><div style="height:70px"></div><div style="width:60%"></div><div style="height:90px"></div></div>`;
+  steps.forEach(s => s.className = "st");
+  body.classList.add("sf-open", "sf-loading");
+  for (let i = 0; i < steps.length; i++){
+    steps[i].classList.add("now");
+    await wait(750);
+    steps[i].className = "st done";
+  }
+  await wait(250);
+  body.classList.remove("sf-loading");
+  ready = true; body.classList.add("sf-ready");
+  const marks = [...document.querySelectorAll(".m")];
+  marks.forEach((m, i) => { m.style.transitionDelay = (i * 90) + "ms"; });
+  setTimeout(() => marks.forEach(m => m.style.transitionDelay = ""), marks.length * 90 + 600);
+  active = null; onScroll(); busy = false;
+}
+function turnOff(){
+  if (busy) return;
+  closePop(); ready = false; active = null; applyDim();
+  body.classList.remove("sf-ready", "sf-open", "sf-loading");
+  document.querySelectorAll(".m.on").forEach(m => m.classList.remove("on"));
+  sfBtn.setAttribute("aria-pressed", "false"); sfBtn.setAttribute("aria-label", "ScrollFact 켜기");
+}
+sfBtn.addEventListener("click", () => ready ? turnOff() : turnOn());
+document.getElementById("sfClose").addEventListener("click", turnOff);
+
+renderComments();
+bindMarks();
+</script>
+
+</body></html>

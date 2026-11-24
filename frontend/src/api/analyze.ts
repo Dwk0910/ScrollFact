@@ -81,7 +81,7 @@ function isDiagnosticResult(value: unknown): value is DiagnosticResult {
 
 function createJobRunner<T extends { analysisId: string; snapshotId: string; document: { url: string } }>(
   baseUrl: string,
-  mode: 'analysis' | 'diagnostic',
+  mode: 'analysis' | 'diagnostic' | 'reader',
   validate: (value: unknown) => value is T,
 ): (snapshot: DocumentSnapshot, signal: AbortSignal, onProgress?: (progress: AnalysisProgress) => void) => Promise<T> {
   return async (snapshot, signal, onProgress) => {
@@ -175,10 +175,11 @@ function createJobRunner<T extends { analysisId: string; snapshotId: string; doc
         onProgress?.({
           phase: job.phase,
           sources: job.sources,
+          detail: job.progress,
           originalBytes: html.size,
           uploadedBytes: compressed.size,
         })
-        await waitForPoll(2000, signal)
+        await waitForPoll(750, signal)
         job = await readJob(
           await request(`${endpoint}/${encodeURIComponent(jobId)}`),
         )
@@ -194,4 +195,75 @@ function createJobRunner<T extends { analysisId: string; snapshotId: string; doc
       }
     }
   }
+}
+
+export type ReaderCheck = {
+  quote: string
+  status: 'supported' | 'contradicted' | 'contested' | 'needs_verification' | 'opinion'
+  reason: string
+  evidence: { url: string; quote: string }[]
+}
+export interface ReaderImage { id: string; selector: string; url: string; caption: string; included: boolean; failure?: string | null }
+export interface ReaderResult {
+  comments?: { id: string; selector: string; text: string }[]
+  commentAreaDetected?: boolean
+  images?: ReaderImage[]
+  schemaVersion: '2.0'
+  kind: 'reader'
+  analysisId: string
+  snapshotId: string
+  document: { url: string; title: string }
+  htmlBytes: number
+  passages: { id: string; selector: string; text: string }[]
+  blocks: { id: string; kind: 'body' | 'opinion'; title: string; summary: string; checks: ReaderCheck[] }[]
+  perspectives: { label: string; entries: { blockId: string; quote: string; reason: string }[] }[]
+  excludedBlocks: number
+  model: string
+  inputTokens: number
+  outputTokens: number
+}
+export function isReaderResult(value: unknown): value is ReaderResult {
+  if (!isRecord(value) || value.schemaVersion !== '2.0' || value.kind !== 'reader'
+    || typeof value.analysisId !== 'string' || typeof value.snapshotId !== 'string'
+    || !isRecord(value.document) || typeof value.document.url !== 'string' || typeof value.document.title !== 'string'
+    || !Number.isSafeInteger(value.htmlBytes) || !Number.isSafeInteger(value.excludedBlocks)
+    || !Number.isSafeInteger(value.inputTokens) || !Number.isSafeInteger(value.outputTokens) || typeof value.model !== 'string'
+    || !Array.isArray(value.passages) || !Array.isArray(value.blocks) || !Array.isArray(value.perspectives)) return false
+  const passages = new Map<string, string>()
+  if (value.comments !== undefined && !Array.isArray(value.comments)) return false
+  if (value.commentAreaDetected !== undefined && typeof value.commentAreaDetected !== 'boolean') return false
+  if (value.images !== undefined && !Array.isArray(value.images)) return false
+  const imagePassages: { id: string; selector: string; text: string }[] = []
+  for (const image of (value.images || []) as unknown[]) {
+    if (!isRecord(image) || typeof image.id !== 'string' || typeof image.selector !== 'string' || typeof image.caption !== 'string'
+      || typeof image.url !== 'string' || typeof image.included !== 'boolean' || (image.failure != null && typeof image.failure !== 'string')) return false
+    try { if (!['http:', 'https:'].includes(new URL(image.url).protocol)) return false } catch { return false }
+    imagePassages.push({id:image.id,selector:image.selector,text:image.caption})
+  }
+  for (const p of [...value.passages, ...((value.comments || []) as unknown[]), ...imagePassages]) {
+    if (!isRecord(p) || typeof p.id !== 'string' || passages.has(p.id) || typeof p.selector !== 'string' || typeof p.text !== 'string') return false
+    passages.set(p.id, p.text)
+  }
+  const ids = new Set<string>()
+  for (const b of value.blocks) {
+    if (!isRecord(b) || typeof b.id !== 'string' || !passages.has(b.id) || ids.has(b.id)
+      || !['body', 'opinion'].includes(String(b.kind)) || typeof b.title !== 'string' || typeof b.summary !== 'string' || !Array.isArray(b.checks)) return false
+    ids.add(b.id)
+    for (const c of b.checks) {
+      if (!isRecord(c) || typeof c.quote !== 'string' || !c.quote || !passages.get(b.id)!.includes(c.quote)
+        || !['supported', 'contradicted', 'contested', 'needs_verification', 'opinion'].includes(String(c.status))
+        || typeof c.reason !== 'string' || !Array.isArray(c.evidence)) return false
+      for (const e of c.evidence) {
+        if (!isRecord(e) || typeof e.url !== 'string' || typeof e.quote !== 'string') return false
+        try { if (!['http:', 'https:'].includes(new URL(e.url).protocol)) return false } catch { return false }
+      }
+    }
+  }
+  return ids.size === passages.size && value.perspectives.every(p => isRecord(p) && typeof p.label === 'string'
+    && Array.isArray(p.entries) && p.entries.length > 0 && p.entries.every((e: unknown) => isRecord(e)
+      && typeof e.blockId === 'string' && passages.has(e.blockId) && !imagePassages.some(image => image.id === e.blockId) && typeof e.quote === 'string'
+      && Boolean(e.quote) && passages.get(e.blockId)!.includes(e.quote) && typeof e.reason === 'string'))
+}
+export function createReaderAnalyzer(baseUrl: string) {
+  return createJobRunner<ReaderResult>(baseUrl, 'reader', isReaderResult)
 }
